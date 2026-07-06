@@ -10,13 +10,14 @@ const ROLE_OPTIONS = [
 ];
 const ROLE_LABEL = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]));
 
-const blankUser = () => ({ username: '', password: '', role: '', full_name: '', is_active: true });
+const blankUser = () => ({ username: '', password: '', role: '', full_name: '', is_active: true, staff_id: '' });
 const PASSWORD_HINT = 'At least 8 characters, including a letter and a number.';
 
 const fmtDate = (v) => (v ? new Date(v).toLocaleString() : null);
 
 export default function Users() {
   const { data, loading, error, reload } = useApi('/users');
+  const { data: staffList } = useApi('/staff');
   const [editing, setEditing] = useState(null); // user object or blank
   const [formError, setFormError] = useState(null);
   const [actionError, setActionError] = useState(null);
@@ -34,6 +35,7 @@ export default function Users() {
           role: editing.role,
           full_name: editing.full_name,
           is_active: editing.is_active,
+          staff_id: editing.role === 'staff' ? editing.staff_id || null : null,
         });
       } else {
         // Only send password if the admin typed a new one (reset).
@@ -41,6 +43,7 @@ export default function Users() {
           role: editing.role,
           full_name: editing.full_name,
           is_active: editing.is_active,
+          staff_id: editing.role === 'staff' ? editing.staff_id || null : null,
         };
         if (editing.password) payload.password = editing.password;
         await api.put(`/users/${editing.user_id}`, payload);
@@ -74,7 +77,7 @@ export default function Users() {
         {loading ? <p className="muted">Loading…</p> : (
           <table>
             <thead>
-              <tr><th>ID</th><th>Username</th><th>Full name</th><th>Role</th><th>Status</th><th>Last login</th><th>Actions</th></tr>
+              <tr><th>ID</th><th>Username</th><th>Full name</th><th>Role</th><th>Linked staff</th><th>Status</th><th>Last login</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {(data || []).map((u) => (
@@ -83,6 +86,7 @@ export default function Users() {
                   <td>{u.username}</td>
                   <td>{u.full_name || <span className="muted">—</span>}</td>
                   <td>{ROLE_LABEL[u.role] || u.role}</td>
+                  <td>{u.role === 'staff' ? (u.staff_name || <span className="muted">not linked</span>) : <span className="muted">—</span>}</td>
                   <td>
                     <span className={`badge ${u.is_active ? 'Approved' : 'Rejected'}`}>
                       {u.is_active ? 'Active' : 'Inactive'}
@@ -95,7 +99,7 @@ export default function Users() {
                   </td>
                 </tr>
               ))}
-              {(data || []).length === 0 && <tr><td colSpan={7} className="muted">No users.</td></tr>}
+              {(data || []).length === 0 && <tr><td colSpan={8} className="muted">No users.</td></tr>}
             </tbody>
           </table>
         )}
@@ -123,6 +127,19 @@ export default function Users() {
                   {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
+              {editing.role === 'staff' && (
+                <div className="field">
+                  <label>Linked staff member *</label>
+                  <select required value={editing.staff_id ?? ''}
+                    onChange={(e) => setEditing({ ...editing, staff_id: e.target.value })}>
+                    <option value="">— select staff —</option>
+                    {(staffList || []).map((s) => (
+                      <option key={s.staff_id} value={s.staff_id}>{s.staff_name}</option>
+                    ))}
+                  </select>
+                  <span className="muted">This login can only view/edit this staff member's diary.</span>
+                </div>
+              )}
               <div className="field">
                 <label>{isNew ? 'Password *' : 'Reset password (blank = unchanged)'}</label>
                 <input type="password" autoComplete="new-password"

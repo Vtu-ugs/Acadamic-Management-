@@ -26,12 +26,29 @@ async function seed() {
     await sequelize.query(ddl);
     console.log('✓ app_user table ready');
 
-    // Add last_login to tables created before this column existed.
+    // Add columns to tables created before they existed (idempotent).
     const [cols] = await sequelize.query('SHOW COLUMNS FROM app_user');
-    if (!cols.some((c) => c.Field === 'last_login')) {
+    const colNames = cols.map((c) => c.Field);
+    if (!colNames.includes('last_login')) {
       await sequelize.query('ALTER TABLE app_user ADD COLUMN last_login DATETIME NULL');
       console.log('✓ added last_login column');
     }
+    if (!colNames.includes('staff_id')) {
+      await sequelize.query('ALTER TABLE app_user ADD COLUMN staff_id INT NULL');
+      console.log('✓ added staff_id column');
+    }
+
+    // Activity log table (login/logout + diary changes).
+    await sequelize.query(`CREATE TABLE IF NOT EXISTS activity_log (
+      log_id     INT AUTO_INCREMENT PRIMARY KEY,
+      user_id    INT NULL,
+      username   VARCHAR(50),
+      role       VARCHAR(30),
+      action     VARCHAR(40) NOT NULL,
+      detail     VARCHAR(255),
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+    console.log('✓ activity_log table ready');
 
     for (const u of DEFAULT_USERS) {
       const hash = bcrypt.hashSync(u.password, 10);

@@ -14,6 +14,7 @@ import Staff from './pages/Staff.jsx';
 import Coordinators from './pages/Coordinators.jsx';
 import Diary from './pages/Diary.jsx';
 import Users from './pages/Users.jsx';
+import ActivityLog from './pages/ActivityLog.jsx';
 import ChangePassword from './pages/ChangePassword.jsx';
 import Login from './pages/Login.jsx';
 import { useAuth } from './auth.jsx';
@@ -35,6 +36,7 @@ const nav = [
   { to: '/usn-pending', label: 'USN Pending', element: <UsnPending /> },
   { to: '/import-export', label: 'Import / Export', element: <ImportExport /> },
   { to: '/users', label: 'User Management', element: <Users /> },
+  { to: '/activity', label: 'Activity Log', element: <ActivityLog /> },
   { to: '/change-password', label: 'Change Password', element: <ChangePassword /> },
 ];
 
@@ -45,9 +47,9 @@ const ROLE_ROUTES = {
   admission_staff: [
     '/', '/students', '/admissions', '/fees', '/fee-structure',
     '/fee-reports', '/fee-ledger', '/certificates', '/courses',
-    '/usn-pending', '/import-export', '/change-password',
+    '/usn-pending', '/import-export',
   ],
-  staff: ['/staff', '/coordinators', '/diary', '/change-password'],
+  staff: ['/staff', '/coordinators', '/diary'],
 };
 
 const HOME_BY_ROLE = { admin: '/', admission_staff: '/admissions', staff: '/staff' };

@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { AppUser } = require('../models');
 const { JWT_SECRET } = require('../middleware/auth');
 const { validatePassword } = require('../utils/passwordPolicy');
+const { logActivity } = require('../utils/activityLog');
 
 const TOKEN_TTL = '8h';
 
@@ -24,14 +25,25 @@ async function login(req, res) {
   await user.save();
 
   const token = jwt.sign(
-    { userId: user.user_id, username: user.username, role: user.role },
+    { userId: user.user_id, username: user.username, role: user.role, staff_id: user.staff_id },
     JWT_SECRET,
     { expiresIn: TOKEN_TTL }
   );
 
+  await logActivity(
+    { userId: user.user_id, username: user.username, role: user.role },
+    'login',
+    'Signed in'
+  );
+
   return res.json({
     token,
-    user: { username: user.username, role: user.role, full_name: user.full_name },
+    user: {
+      username: user.username,
+      role: user.role,
+      full_name: user.full_name,
+      staff_id: user.staff_id,
+    },
   });
 }
 
@@ -39,7 +51,15 @@ async function login(req, res) {
 async function me(req, res) {
   const user = await AppUser.findByPk(req.user.userId);
   if (!user || !user.is_active) return res.status(401).json({ error: 'Session no longer valid' });
-  return res.json({ username: user.username, role: user.role, full_name: user.full_name });
+  return res.json({
+    username: user.username, role: user.role, full_name: user.full_name, staff_id: user.staff_id,
+  });
+}
+
+// POST /api/auth/logout — record the sign-out (token is discarded client-side).
+async function logout(req, res) {
+  await logActivity(req.user, 'logout', 'Signed out');
+  return res.json({ message: 'Logged out' });
 }
 
 // POST /api/auth/change-password — verify current password, then set a new one.
@@ -62,4 +82,4 @@ async function changePassword(req, res) {
   return res.json({ message: 'Password changed successfully' });
 }
 
-module.exports = { login, me, changePassword };
+module.exports = { login, me, logout, changePassword };

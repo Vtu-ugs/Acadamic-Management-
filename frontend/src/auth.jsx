@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from 'react';
+import { api } from './api.js';
 
 const STORAGE_KEY = 'ams_auth';
 const AuthContext = createContext(null);
@@ -21,7 +22,9 @@ export function AuthProvider({ children }) {
     setAuth(next);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Record the sign-out (best-effort) before discarding the token.
+    try { await api.post('/auth/logout'); } catch { /* ignore */ }
     localStorage.removeItem(STORAGE_KEY);
     setAuth(null);
   }, []);

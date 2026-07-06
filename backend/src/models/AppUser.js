@@ -10,6 +10,7 @@ const AppUser = sequelize.define('app_user', {
   full_name:     { type: DataTypes.STRING(120) },
   is_active:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   last_login:    { type: DataTypes.DATE, allowNull: true },
+  staff_id:      { type: DataTypes.INTEGER, allowNull: true }, // links a staff login to its staff record
 });
 
 module.exports = AppUser;

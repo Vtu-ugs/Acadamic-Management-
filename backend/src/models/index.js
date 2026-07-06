@@ -11,6 +11,7 @@ const Certificate = require('./Certificate');
 const AcademicCoordinator = require('./AcademicCoordinator');
 const WeeklyDiary = require('./WeeklyDiary');
 const AppUser = require('./AppUser');
+const ActivityLog = require('./ActivityLog');
 
 // ------- Associations (mirror Section 5.10 ER summary) -------
 
@@ -51,6 +52,10 @@ Staff.hasMany(WeeklyDiary, { foreignKey: 'staff_id', onDelete: 'CASCADE' });
 WeeklyDiary.belongsTo(Staff, { foreignKey: 'staff_id' });
 WeeklyDiary.belongsTo(Staff, { as: 'approver', foreignKey: 'approved_by' });
 
+// APP_USER ── STAFF (a staff login is tied to one staff record)
+AppUser.belongsTo(Staff, { foreignKey: 'staff_id' });
+Staff.hasOne(AppUser, { foreignKey: 'staff_id' });
+
 module.exports = {
   sequelize,
   Course,
@@ -64,4 +69,5 @@ module.exports = {
   AcademicCoordinator,
   WeeklyDiary,
   AppUser,
+  ActivityLog,
 };

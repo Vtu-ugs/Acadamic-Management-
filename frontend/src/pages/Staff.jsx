@@ -16,6 +16,7 @@ export default function Staff() {
         { key: 'email', label: 'Email' },
         { key: 'mobile', label: 'Mobile' },
         { key: 'course', label: 'Course', render: (r) => r.course?.course_name || r.course_id },
+        { key: 'login_username', label: 'Login', render: (r) => r.login_username || <span className="muted">no login</span> },
       ]}
       fields={[
         { key: 'staff_name', label: 'Staff Name', required: true },
@@ -23,6 +24,9 @@ export default function Staff() {
         { key: 'designation', label: 'Designation' },
         { key: 'email', label: 'Email' },
         { key: 'mobile', label: 'Mobile' },
+        // Login credentials the staff will use to sign in and update their diary.
+        { key: 'login_username', label: 'Login Username' },
+        { key: 'login_password', label: 'Login Password (min 8, unique — blank keeps current)', type: 'password' },
       ]}
     />
   );

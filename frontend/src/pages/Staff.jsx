@@ -1,0 +1,29 @@
+import CrudPage, { useOptions } from '../components/CrudPage.jsx';
+
+// 5.8 STAFF — faculty master (FR-X1)
+export default function Staff() {
+  const { courseOptions } = useOptions();
+  return (
+    <CrudPage
+      title="Staff"
+      subtitle="Faculty/staff master — used as issued_by / approved_by reference (FR-X1)"
+      path="/staff"
+      pk="staff_id"
+      columns={[
+        { key: 'staff_id', label: 'ID' },
+        { key: 'staff_name', label: 'Name' },
+        { key: 'designation', label: 'Designation' },
+        { key: 'email', label: 'Email' },
+        { key: 'mobile', label: 'Mobile' },
+        { key: 'course', label: 'Course', render: (r) => r.course?.course_name || r.course_id },
+      ]}
+      fields={[
+        { key: 'staff_name', label: 'Staff Name', required: true },
+        { key: 'course_id', label: 'Course', type: 'select', required: true, options: courseOptions },
+        { key: 'designation', label: 'Designation' },
+        { key: 'email', label: 'Email' },
+        { key: 'mobile', label: 'Mobile' },
+      ]}
+    />
+  );
+}

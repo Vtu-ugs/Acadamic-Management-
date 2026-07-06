@@ -102,14 +102,14 @@ export default function Admissions() {
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>CSN</th><th>Student</th><th>Course</th><th>Year</th>
+                <th>Sl. No</th><th>CSN</th><th>Student</th><th>Course</th><th>Year</th>
                 <th>Mode</th><th>Entry</th><th>Category</th><th>Loan</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {data?.map((r) => (
+              {data?.map((r, i) => (
                 <tr key={r.adm_id}>
-                  <td>{r.adm_id}</td>
+                  <td>{i + 1}</td>
                   <td>{r.csn}</td>
                   <td>{r.student?.student_name}</td>
                   <td>{r.course?.course_name || courseName(r.course_id)}</td>

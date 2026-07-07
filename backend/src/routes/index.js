@@ -24,6 +24,9 @@ router.use('/users', requireRole('admin'), require('./userRoutes'));
 // Admin-only: activity/audit log (logins, logouts, diary changes).
 router.use('/activity', requireRole('admin'), require('./activityRoutes'));
 
+// Dashboard overview — any authenticated user may read it.
+router.use('/dashboard', require('./dashboardRoutes'));
+
 // Feature-rich modules
 router.use('/students', admission, require('./studentRoutes'));
 router.use('/fees', admission, require('./feeRoutes'));

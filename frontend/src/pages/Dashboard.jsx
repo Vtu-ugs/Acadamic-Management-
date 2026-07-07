@@ -1,101 +1,114 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import Modal from '../components/Modal';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState(null);
-  const [branches, setBranches] = useState(null);
+  const [data, setData] = useState(null);
+  const [year, setYear] = useState('all');
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState(null);
+  const didDefault = useRef(false);
 
   useEffect(() => {
-    Promise.all([
-      api.get('/students'),
-      api.get('/students/usn-pending'),
-      api.get('/courses'),
-      api.get('/fees/report/pending-dues'),
-      api.get('/certificates'),
-      api.get('/students/branch-stats'),
-    ])
-      .then(([students, pending, courses, dues, certs, branchStats]) => {
-        const totalDue = dues.reduce((s, f) => s + Number(f.pending_due || 0), 0);
-        setStats({
-          students: students.length,
-          pending: pending.length,
-          courses: courses.length,
-          duesCount: dues.length,
-          totalDue,
-          certs: certs.length,
-        });
-        setBranches(branchStats);
+    setError(null);
+    api.get(`/dashboard/stats?academic_year=${encodeURIComponent(year)}`)
+      .then((d) => {
+        setData(d);
+        // On first load, default to the latest batch when one exists.
+        if (!didDefault.current && year === 'all' && d.academic_years?.length) {
+          didDefault.current = true;
+          setYear(d.academic_years[0]);
+        }
       })
       .catch((e) => setError(e.message));
-  }, []);
+  }, [year]);
+
+  const totals = data?.totals;
+  const branches = data?.branches || [];
+  const years = data?.academic_years || [];
+  const scopeLabel = year === 'all' ? 'All batches' : `${year} admission batch`;
 
   return (
     <div>
-      <h2 className="page-title">Dashboard</h2>
-      <p className="page-sub">Student Administration &amp; Financial Records — overview</p>
+      <div className="dash-head">
+        <div>
+          <h2 className="page-title">Dashboard</h2>
+          <p className="page-sub">Student Administration &amp; Financial Records — {scopeLabel}</p>
+        </div>
+        <div className="dash-year">
+          <label>Academic Year</label>
+          <select value={year} onChange={(e) => setYear(e.target.value)}>
+            <option value="all">All batches</option>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+
       {error && <div className="error">Backend not reachable: {error}</div>}
-      {stats && (
+
+      {totals && (
         <div className="stat-grid">
-          <Stat num={stats.students} lbl="Total Students" />
-          <Stat num={stats.pending} lbl="USN Pending" />
-          <Stat num={stats.courses} lbl="Courses" />
-          <Stat num={stats.duesCount} lbl="Students with Dues" />
-          <Stat num={`₹${stats.totalDue.toLocaleString('en-IN')}`} lbl="Total Pending Dues" />
-          <Stat num={stats.certs} lbl="Certificates Issued" />
+          <Stat num={totals.students} lbl="Total Students" />
+          <Stat num={totals.usnPending} lbl="USN Pending" />
+          <Stat num={totals.courses} lbl="Courses" />
+          <Stat num={totals.duesCount} lbl="Students with Dues" />
+          <Stat num={`₹${Number(totals.totalDue).toLocaleString('en-IN')}`} lbl="Total Pending Dues" />
+          <Stat num={totals.certs} lbl="Certificates Issued" />
         </div>
       )}
 
-      {branches && branches.length > 0 && (
+      {data && (
         <>
-          <h3 className="section-title">Branch-wise Statistics</h3>
+          <h3 className="section-title">Branch-wise Statistics <span className="muted">({scopeLabel})</span></h3>
           <p className="page-sub">Click a branch to see its caste-wise details.</p>
-          <div className="branch-grid">
-            {branches.map((b) => (
-              <button
-                type="button"
-                className="branch-card"
-                key={b.course_id}
-                onClick={() => setSelected(b)}
-              >
-                <div className="branch-name">{b.course_name}</div>
-                <div className="branch-figures">
-                  <div className="fig">
-                    <div className="fig-num">{b.total_students}</div>
-                    <div className="fig-lbl">Total Students</div>
-                  </div>
-                  <div className="fig">
-                    <div className="fig-num">
-                      ₹{Number(b.total_pending || 0).toLocaleString('en-IN')}
+          {branches.length === 0 ? (
+            <p className="muted">No branches to show.</p>
+          ) : (
+            <div className="branch-grid">
+              {branches.map((b) => (
+                <button
+                  type="button"
+                  className="branch-card"
+                  key={b.course_id}
+                  onClick={() => setSelected(b)}
+                >
+                  <div className="branch-name">{b.course_name}</div>
+                  <div className="branch-figures">
+                    <div className="fig">
+                      <div className="fig-num">{b.total_students}</div>
+                      <div className="fig-lbl">Total Students</div>
                     </div>
-                    <div className="fig-lbl">Pending Dues</div>
+                    <div className="fig">
+                      <div className="fig-num">
+                        ₹{Number(b.total_pending || 0).toLocaleString('en-IN')}
+                      </div>
+                      <div className="fig-lbl">Pending Dues</div>
+                    </div>
+                    <div className="fig">
+                      <div className="fig-num">{b.dues_count}</div>
+                      <div className="fig-lbl">With Dues</div>
+                    </div>
                   </div>
-                  <div className="fig">
-                    <div className="fig-num">{b.dues_count}</div>
-                    <div className="fig-lbl">With Dues</div>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          )}
         </>
       )}
 
       {selected && (
-        <BranchDetail branch={selected} onClose={() => setSelected(null)} />
+        <BranchDetail branch={selected} scopeLabel={scopeLabel} onClose={() => setSelected(null)} />
       )}
     </div>
   );
 }
 
-function BranchDetail({ branch, onClose }) {
+function BranchDetail({ branch, scopeLabel, onClose }) {
   // Caste/category breakdown, biggest group first.
   const cats = Object.entries(branch.categories || {}).sort((a, b) => b[1] - a[1]);
 
   return (
-    <Modal title={`${branch.course_name} — Details`} onClose={onClose}>
+    <Modal title={`${branch.course_name} — ${scopeLabel}`} onClose={onClose}>
       <div className="branch-figures" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <div className="fig">
           <div className="fig-num">{branch.intake ?? '-'}</div>

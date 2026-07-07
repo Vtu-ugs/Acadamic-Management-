@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const {
-  sequelize, Student, StudentPersonalDetails, Admission, Course,
+  sequelize, Student, StudentPersonalDetails, Admission, Course, Fee,
 } = require('../models');
 const { generateCsn, withCsnRetry } = require('../utils/csn');
 
@@ -40,6 +40,62 @@ exports.search = async (req, res) => {
     limit: 100,
   });
   res.json(students);
+};
+
+// Dashboard: per-branch (per-course) statistics — total students, total pending
+// dues, and a caste/category-wise headcount for each branch. One assembled
+// object per course so the dashboard can render a card per branch.
+exports.branchStats = async (_req, res) => {
+  const [courses, students, fees] = await Promise.all([
+    Course.findAll({ order: [['course_name', 'ASC']], raw: true }),
+    Student.findAll({
+      attributes: ['csn', 'course_id'],
+      include: [{ model: StudentPersonalDetails, attributes: ['category'] }],
+      raw: true,
+      nest: true,
+    }),
+    // Only fees still carrying a balance — mirrors the pending-dues report so
+    // the per-branch totals add up to the dashboard-wide "Total Pending Dues".
+    Fee.findAll({
+      attributes: ['pending_due'],
+      where: { pending_due: { [Op.gt]: 0 } },
+      include: [{ model: Admission, attributes: ['course_id'] }],
+      raw: true,
+      nest: true,
+    }),
+  ]);
+
+  const norm = (c) => (c || '').trim() || 'Unspecified';
+
+  const byCourse = new Map();
+  for (const c of courses) {
+    byCourse.set(c.course_id, {
+      course_id: c.course_id,
+      course_name: c.course_name,
+      intake: c.intake,
+      total_students: 0,
+      total_pending: 0,
+      dues_count: 0,
+      categories: {},
+    });
+  }
+
+  for (const s of students) {
+    const b = byCourse.get(s.course_id);
+    if (!b) continue;
+    b.total_students += 1;
+    const cat = norm(s.student_personal_detail && s.student_personal_detail.category);
+    b.categories[cat] = (b.categories[cat] || 0) + 1;
+  }
+
+  for (const f of fees) {
+    const b = byCourse.get(f.admission && f.admission.course_id);
+    if (!b) continue;
+    b.total_pending += Number(f.pending_due || 0);
+    b.dues_count += 1;
+  }
+
+  res.json(Array.from(byCourse.values()));
 };
 
 // FR-S3a: students with USN pending (usn IS NULL)

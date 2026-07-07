@@ -12,6 +12,7 @@ router.get('/export', h(ie.exportStudents));                 // FR-S6
 router.post('/import', upload.single('file'), h(ie.importStudents)); // FR-S7
 router.get('/search', h(c.search));                          // FR-S3
 router.get('/usn-pending', h(c.usnPending));                 // FR-S3a
+router.get('/branch-stats', h(c.branchStats));               // Dashboard per-branch stats
 
 router.get('/', h(c.list));                                  // FR-S4
 router.post('/', h(c.create));                               // FR-S1

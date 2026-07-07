@@ -122,6 +122,20 @@ button.link { background: none; color: var(--primary-light); padding: 2px 4px; t
 .stat .num { font-size: 26px; font-weight: 700; color: var(--primary); }
 .stat .lbl { color: var(--muted); font-size: 12px; margin-top: 4px; }
 
+/* ---- Branch-wise statistics ---- */
+.section-title { margin: 26px 0 12px; font-size: 16px; font-weight: 700; color: var(--text); }
+.branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.branch-card { display: block; width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; transition: border-color .12s, box-shadow .12s; }
+.branch-card:hover { background: var(--panel); }
+.branch-card:hover { border-color: var(--primary-light); box-shadow: 0 2px 8px rgba(46,109,164,.12); }
+.branch-name { font-size: 15px; font-weight: 700; color: var(--primary); padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+.branch-figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fig { text-align: center; }
+.fig-num { font-size: 18px; font-weight: 700; color: var(--text); }
+.fig-lbl { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.caste-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 8px; }
+.caste-empty { color: var(--muted); font-size: 12px; }
+
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: flex-start; justify-content: center; padding-top: 5vh; z-index: 50; }
 .modal { background: #fff; border-radius: 8px; padding: 22px; width: min(760px, 92vw); max-height: 88vh; overflow-y: auto; }
 .modal h3 { margin-top: 0; }

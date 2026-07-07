@@ -6,7 +6,7 @@ import { useAuth } from '../auth.jsx';
 const HOME_BY_ROLE = {
   admin: '/',
   admission_staff: '/admissions',
-  staff: '/staff',
+  staff: '/diary',
 };
 
 export default function Login() {

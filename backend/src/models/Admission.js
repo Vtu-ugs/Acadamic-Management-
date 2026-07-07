@@ -9,6 +9,7 @@ const Admission = sequelize.define('admission', {
   course_id:         { type: DataTypes.INTEGER, allowNull: false },
   kea_ad_no:         { type: DataTypes.STRING(30) },
   academic_year:     { type: DataTypes.STRING(10) },
+  admission_date:    { type: DataTypes.DATEONLY }, // date the student was admitted (auto-fills TC row f.1)
   admission_mode:    { type: DataTypes.STRING(20) },
   entry_type:        { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'Regular' }, // Regular / Lateral
   actual_category:   { type: DataTypes.STRING(30) },

@@ -9,6 +9,10 @@ const Certificate = sequelize.define('certificate', {
   issue_date: { type: DataTypes.DATEONLY },
   issued_by:  { type: DataTypes.STRING(100) },
   remarks:    { type: DataTypes.TEXT },
+  // Staff-entered fields for the Transfer Certificate (rows h–n plus T.C. No.,
+  // Serial No. and the admission/leaving dates). Stored as a JSON string;
+  // rows a–g are always auto-fetched from the student record at render time.
+  tc_details: { type: DataTypes.TEXT },
 });
 
 module.exports = Certificate;

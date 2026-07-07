@@ -6,7 +6,16 @@ import Modal from '../components/Modal.jsx';
 import SearchSelect from '../components/SearchSelect.jsx';
 
 const TYPES = ['Bonafide', 'TC', 'Probable Expenditure'];
-const blank = { adm_id: '', cert_type: 'Bonafide', issue_date: '', issued_by: '', remarks: '' };
+
+// Transfer Certificate — staff-entered rows (a–g are auto-filled from the
+// student record at PDF time, so they are not collected here).
+const blankTc = {
+  serial_no: '', tc_no: '', nationality: '',
+  class_secured: '', promotion_next: '', dues_cleared: '',
+  completion_year: '', reason_leaving: '', promotion_higher: '', conduct: '',
+};
+
+const blank = { adm_id: '', cert_type: 'Bonafide', issue_date: '', issued_by: '', remarks: '', tc: { ...blankTc } };
 
 // 5.5 CERTIFICATE (FR-C1 to FR-C6)
 export default function Certificates() {
@@ -19,9 +28,15 @@ export default function Certificates() {
   const save = async (e) => {
     e.preventDefault();
     setFormError(null);
-    try { await api.post('/certificates', { ...form, adm_id: Number(form.adm_id) }); setForm(null); reload(); }
+    const { tc, ...rest } = form;
+    const payload = { ...rest, adm_id: Number(form.adm_id) };
+    // Only the Transfer Certificate carries the extra staff-entered fields.
+    if (form.cert_type === 'TC') payload.tc_details = tc;
+    try { await api.post('/certificates', payload); setForm(null); reload(); }
     catch (err) { setFormError(err.message); }
   };
+
+  const setTc = (k, v) => setForm((f) => ({ ...f, tc: { ...f.tc, [k]: v } }));
 
   const remove = async (id) => {
     if (!confirm(`Delete certificate ${id}?`)) return;
@@ -102,6 +117,50 @@ export default function Certificates() {
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Remarks / Purpose</label>
                 <textarea value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} /></div>
             </div>
+
+            {form.cert_type === 'TC' && (
+              <div className="card" style={{ marginTop: 14 }}>
+                <p className="page-sub" style={{ marginTop: 0 }}>
+                  Rows <b>a–g</b> are auto-filled from the student record — name, USN,
+                  father, caste/religion/sex, DOB, <b>date of admission</b> (from the
+                  admission record), <b>date of leaving</b> (the issue date above) and
+                  <b> class &amp; discipline</b>. Fill the remaining details below:
+                </p>
+                <div className="form-grid">
+                  <div className="field"><label>Admission Reg. Serial No.</label>
+                    <input placeholder="e.g. 145" value={form.tc.serial_no}
+                      onChange={(e) => setTc('serial_no', e.target.value)} /></div>
+                  <div className="field"><label>T.C. No.</label>
+                    <input placeholder="e.g. TC/2025-26/012" value={form.tc.tc_no}
+                      onChange={(e) => setTc('tc_no', e.target.value)} /></div>
+                  <div className="field"><label>Nationality</label>
+                    <input placeholder="Indian" value={form.tc.nationality}
+                      onChange={(e) => setTc('nationality', e.target.value)} /></div>
+                  <div className="field"><label>h. Class and discipline Secured</label>
+                    <input placeholder="e.g. B.E. CSE" value={form.tc.class_secured}
+                      onChange={(e) => setTc('class_secured', e.target.value)} /></div>
+                  <div className="field"><label>i. Promotion to next higher classes</label>
+                    <input placeholder="Yes / No" value={form.tc.promotion_next}
+                      onChange={(e) => setTc('promotion_next', e.target.value)} /></div>
+                  <div className="field"><label>j. All dues paid &amp; books returned</label>
+                    <input placeholder="Yes / No" value={form.tc.dues_cleared}
+                      onChange={(e) => setTc('dues_cleared', e.target.value)} /></div>
+                  <div className="field"><label>k. Completion Year of Degree</label>
+                    <input placeholder="e.g. 2025 / Discontinued" value={form.tc.completion_year}
+                      onChange={(e) => setTc('completion_year', e.target.value)} /></div>
+                  <div className="field"><label>m. Promotion to higher class?</label>
+                    <input placeholder="Yes / No" value={form.tc.promotion_higher}
+                      onChange={(e) => setTc('promotion_higher', e.target.value)} /></div>
+                  <div className="field"><label>n. Character and Conduct</label>
+                    <input placeholder="Good" value={form.tc.conduct}
+                      onChange={(e) => setTc('conduct', e.target.value)} /></div>
+                  <div className="field" style={{ gridColumn: '1 / -1' }}><label>l. Reasons for leaving</label>
+                    <input placeholder="e.g. Health issues / Transfer" value={form.tc.reason_leaving}
+                      onChange={(e) => setTc('reason_leaving', e.target.value)} /></div>
+                </div>
+              </div>
+            )}
+
             {formError && <div className="error">{formError}</div>}
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
               <button type="submit">Save</button>

@@ -92,6 +92,7 @@ CREATE TABLE admission (
   course_id         INT NOT NULL,
   kea_ad_no         VARCHAR(30),
   academic_year     VARCHAR(10),
+  admission_date    DATE,                      -- date of admission (auto-fills TC row f.1)
   admission_mode    VARCHAR(20),               -- CET / Management / NRI
   entry_type        VARCHAR(20) NOT NULL DEFAULT 'Regular', -- Regular / Lateral
   actual_category   VARCHAR(30),
@@ -157,6 +158,7 @@ CREATE TABLE certificate (
   issue_date DATE,
   issued_by  VARCHAR(100),
   remarks    TEXT,
+  tc_details TEXT,                          -- JSON of staff-entered TC fields (rows h–n, T.C. No., dates)
   CONSTRAINT fk_cert_admission FOREIGN KEY (adm_id)
     REFERENCES admission(adm_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

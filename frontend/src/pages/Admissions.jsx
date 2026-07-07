@@ -16,9 +16,9 @@ const batchYearFromCsn = (csn) => {
 };
 
 const blank = {
-  adm_id: null, csn: '', course_id: '', kea_ad_no: '', academic_year: '', admission_mode: '',
-  entry_type: 'Regular', actual_category: '', admitted_category: '', loan_provider_name: '',
-  available_loan: '', outside_country: false, outside_state: false,
+  adm_id: null, csn: '', course_id: '', kea_ad_no: '', academic_year: '', admission_date: '',
+  admission_mode: '', entry_type: 'Regular', actual_category: '', admitted_category: '',
+  loan_provider_name: '', available_loan: '', outside_country: false, outside_state: false,
 };
 
 // 5.3 ADMISSION (FR-S5, FR-F8)
@@ -55,7 +55,8 @@ export default function Admissions() {
     setFormError(null);
     setForm({
       adm_id: row.adm_id, csn: row.csn, course_id: row.course_id, kea_ad_no: row.kea_ad_no || '',
-      academic_year: row.academic_year || '', admission_mode: row.admission_mode || '',
+      academic_year: row.academic_year || '', admission_date: row.admission_date || '',
+      admission_mode: row.admission_mode || '',
       entry_type: row.entry_type || 'Regular', actual_category: row.actual_category || '',
       admitted_category: row.admitted_category || '', loan_provider_name: row.loan_provider_name || '',
       available_loan: row.available_loan ?? '', outside_country: !!row.outside_country,
@@ -71,6 +72,7 @@ export default function Admissions() {
       csn: Number(form.csn),
       course_id: Number(form.course_id),
       available_loan: form.available_loan === '' ? null : Number(form.available_loan),
+      admission_date: form.admission_date || null,
     };
     delete payload.adm_id;
     try {
@@ -152,6 +154,9 @@ export default function Admissions() {
               <div className="field"><label>Batch / Academic Year (auto from CSN)</label>
                 <input value={form.academic_year} placeholder="auto-filled from CSN, e.g. 2026-27"
                   onChange={(e) => setForm({ ...form, academic_year: e.target.value })} /></div>
+              <div className="field"><label>Date of Admission</label>
+                <input type="date" value={form.admission_date}
+                  onChange={(e) => setForm({ ...form, admission_date: e.target.value })} /></div>
               <div className="field"><label>Admission Mode (CET/Management/NRI)</label>
                 <input value={form.admission_mode} onChange={(e) => setForm({ ...form, admission_mode: e.target.value })} /></div>
               <div className="field"><label>Entry Type *</label>

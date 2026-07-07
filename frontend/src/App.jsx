@@ -49,10 +49,11 @@ const ROLE_ROUTES = {
     '/fee-reports', '/fee-ledger', '/certificates', '/courses',
     '/usn-pending', '/import-export',
   ],
-  staff: ['/staff', '/coordinators', '/diary'],
+  // Staff users can only work on their own weekly diary — nothing else.
+  staff: ['/diary'],
 };
 
-const HOME_BY_ROLE = { admin: '/', admission_staff: '/admissions', staff: '/staff' };
+const HOME_BY_ROLE = { admin: '/', admission_staff: '/admissions', staff: '/diary' };
 const ROLE_LABEL = { admin: 'Admin', admission_staff: 'Admission Staff', staff: 'Staff' };
 
 export default function App() {

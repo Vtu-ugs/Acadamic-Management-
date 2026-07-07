@@ -34,6 +34,15 @@ const isFemale = (gender) => /^f/i.test(String(gender || ''));
 const salutation = (gender) => (isFemale(gender) ? 'Miss.' : 'Mr.');
 const subjectPronoun = (gender) => (isFemale(gender) ? 'She' : 'He');
 
+// Date as dd.mm.yyyy (matches the printed TC format). Passes non-dates through.
+const fmtDate = (d) => {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return String(d);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(dt.getDate())}.${p(dt.getMonth() + 1)}.${dt.getFullYear()}`;
+};
+
 // Indian-grouped currency, e.g. 23590 -> "Rs.23,590.00"
 const inr = (v) => `Rs.${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -86,10 +95,15 @@ exports.list = async (req, res) => {
   res.json(certs);
 };
 
-// FR-C3: capture cert_type, issue_date, issued_by, remarks
+// FR-C3: capture cert_type, issue_date, issued_by, remarks (+ TC staff fields)
 exports.create = async (req, res) => {
-  if (!req.body.issue_date) req.body.issue_date = new Date().toISOString().slice(0, 10);
-  const cert = await Certificate.create(req.body);
+  const body = { ...req.body };
+  if (!body.issue_date) body.issue_date = new Date().toISOString().slice(0, 10);
+  // The staff-entered TC fields arrive as an object; persist them as JSON text.
+  if (body.tc_details && typeof body.tc_details === 'object') {
+    body.tc_details = JSON.stringify(body.tc_details);
+  }
+  const cert = await Certificate.create(body);
   res.status(201).json(cert);
 };
 
@@ -192,12 +206,10 @@ exports.generatePdf = async (req, res) => {
     });
     doc.y = y;
   } else {
-    // TC — paragraph body, same letterhead
-    const body = `This is to certify that ${student?.student_name} (USN: ${student?.usn || 'pending'}) was a bonafide `
-      + `student of ${course?.course_name} at this department. This Transfer Certificate is issued on `
-      + `${cert.issue_date}. Conduct and character during the course of study: Good.`;
-    doc.font('Helvetica').fontSize(11).text(body, L, doc.y, { align: 'justify', lineGap: 4, width: R - L });
-    doc.y += 20;
+    // TC — structured a–n row format (a–g auto-fetched, h–n staff-entered)
+    renderTransferCertificate(doc, {
+      L, R, student, personal, course, dept, cert,
+    });
   }
 
   // ---------- Signature ----------
@@ -318,4 +330,89 @@ async function renderProbableExpenditure(doc, ctx) {
     `This Certificate is issued based on the request letter by Student for applying ${purpose}.`,
     L, doc.y, { align: 'justify', lineGap: 4, width: R - L }
   );
+}
+
+// Renders the Transfer Certificate body — the a–n rows. Rows a–g are always
+// auto-fetched from the student/admission record; rows h–n (plus T.C. No.,
+// Serial No. and the admission/leaving dates) come from the staff-entered
+// tc_details JSON, with a blank underline shown when a field was left empty.
+function renderTransferCertificate(doc, ctx) {
+  const {
+    L, R, student, personal, course, dept, cert,
+  } = ctx;
+
+  let td = {};
+  try { td = cert.tc_details ? JSON.parse(cert.tc_details) : {}; } catch { td = {}; }
+
+  // Placeholder shown for a staff field that was left blank.
+  const ph = (v) => (v != null && String(v).trim() !== '' ? String(v) : '__________');
+
+  const sem = Number(student?.semester) || null;
+  const leavingClass = `${sem ? `${ordinal(sem)} Sem ` : ''}${course?.course_name || dept}`.trim();
+  const nationality = td.nationality || 'Indian';
+
+  // Auto-filled dates: admission date from the admission record; date of
+  // leaving = the date this TC is issued. Both fall back to any staff-entered
+  // value, then to a blank underline.
+  const dateOfAdmission = fmtDate(cert.admission?.admission_date) || fmtDate(td.date_of_admission);
+  const dateOfLeaving = fmtDate(cert.issue_date) || fmtDate(td.date_of_leaving);
+
+  // ---------- Admission Reg. Serial No. (left) + T.C. No. (right) ----------
+  const topY = doc.y;
+  doc.font('Helvetica').fontSize(10).text(`Admission Reg. Serial No.: ${ph(td.serial_no)}`, L, topY);
+  doc.font('Helvetica').fontSize(10)
+    .text(`T.C. No.: ${ph(td.tc_no)}`, L, topY, { width: R - L, align: 'right' });
+  doc.moveDown(1.2);
+
+  // [letter, label, value]  — value may be a string or an array of lines.
+  const rows = [
+    ['a.', 'Name of the Student (In Block Letter)', (student?.student_name || '').toUpperCase() || '-'],
+    ['b.', 'University Seat Number', student?.usn || '(USN pending)'],
+    ['c.', 'Name of Father', personal.father_name || '-'],
+    ['d.', 'Caste / Religion / Nationality / Sex', [
+      `Caste: ${personal.category || '-'}    Sub Caste: ${personal.caste || '-'}    Religion: ${personal.religion || '-'}`,
+      `Nationality: ${nationality}        Sex: ${personal.gender || '-'}`,
+    ]],
+    ['e.', 'Date of Birth (as in Admission Reg.)', fmtDate(personal.date_of_birth) || '-'],
+    ['f.', 'Date of Admission / leaving the College', [
+      `1) Date of Admission: ${ph(dateOfAdmission)}`,
+      `2) Date of leaving the College: ${ph(dateOfLeaving)}`,
+    ]],
+    ['g.', 'Class and discipline from which leaves', leavingClass || '-'],
+    ['h.', 'Class and discipline Secured', ph(td.class_secured)],
+    ['i.', 'Promotion to next higher classes', ph(td.promotion_next)],
+    ['j.', 'All dues paid & books returned', ph(td.dues_cleared)],
+    ['k.', 'Completion Year of Degree', ph(td.completion_year)],
+    ['l.', 'Reasons for leaving', ph(td.reason_leaving)],
+    ['m.', 'Promotion to higher class?', ph(td.promotion_higher)],
+    ['n.', 'Character and Conduct', ph(td.conduct)],
+  ];
+
+  const letterX = L;
+  const labelX = L + 22;
+  const valueX = 310;
+  const labelW = valueX - labelX - 8;
+  const valueW = R - valueX;
+
+  rows.forEach(([letter, label, value]) => {
+    const y0 = doc.y;
+    doc.font('Helvetica-Bold').fontSize(10).text(letter, letterX, y0, { width: 20 });
+    doc.font('Helvetica').fontSize(10).text(label, labelX, y0, { width: labelW });
+    const labelH = doc.heightOfString(label, { width: labelW });
+
+    doc.font('Helvetica-Bold').fontSize(10);
+    const vLines = Array.isArray(value) ? value : [value];
+    let vy = y0;
+    let valueH = 0;
+    vLines.forEach((ln) => {
+      doc.text(String(ln), valueX, vy, { width: valueW });
+      const h = doc.heightOfString(String(ln), { width: valueW });
+      vy += h; valueH += h;
+    });
+
+    doc.y = y0 + Math.max(labelH, valueH) + 8;
+  });
+
+  doc.moveDown(1);
+  doc.font('Helvetica').fontSize(10).text(`Date: ${cert.issue_date}`, L, doc.y);
 }

@@ -32,6 +32,27 @@ const FEE_FIELDS = [
 const toBool = (v) => v === true || v === 1 || v === '1'
   || String(v).trim().toLowerCase() === 'true' || String(v).trim().toLowerCase() === 'yes';
 
+const toDigits = (v, maxDigits) => String(v ?? '').replace(/\D/g, '').slice(0, maxDigits);
+
+// A 10-digit Indian mobile. Spreadsheets hold "+91 98765 43210" and
+// "098765 43210"; keeping the first 10 digits of the former yields 9198765432,
+// a wrong number that still passes the [6-9]\d{9} check. Drop the prefix.
+const toMobile = (v) => {
+  let d = String(v ?? '').replace(/\D/g, '');
+  if (d.length === 12 && d.startsWith('91')) d = d.slice(2);
+  else if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  return d.slice(0, 10);
+};
+
+// Personal columns that hold digits only, and how each is normalised. A cell may
+// arrive as a number or a formatted string, so clean it before the model's
+// validators see it — exactly as the Students form does on every keystroke.
+const DIGIT_ONLY_PERSONAL = {
+  student_mobile: toMobile,
+  parent_mobile: toMobile,
+  aadhar_no: (v) => toDigits(v, 12),
+};
+
 // FR-S6: export filtered students to Excel, one row per student with the
 // student's first admission and that admission's first fee record flattened in.
 exports.exportStudents = async (req, res) => {
@@ -171,16 +192,18 @@ exports.importStudents = async (req, res) => {
         if (dupUsn) throw new Error(`Duplicate USN ${usn}`);
       }
       if (row.aadhar_no) {
-        const dupAadhar = await StudentPersonalDetails.findOne({
-          where: { aadhar_no: String(row.aadhar_no).trim() },
-        });
+        // Compare the normalised digits — "1234 5678 9012" and "123456789012"
+        // are the same Aadhaar, and only the latter is ever stored.
+        const aadhaar = DIGIT_ONLY_PERSONAL.aadhar_no(row.aadhar_no);
+        const dupAadhar = await StudentPersonalDetails.findOne({ where: { aadhar_no: aadhaar } });
         if (dupAadhar) throw new Error(`Duplicate Aadhar ${row.aadhar_no}`);
       }
 
       const academic = {}; const personal = {};
       for (const [key, target] of Object.entries(COLUMNS)) {
         if (row[key] == null) continue;
-        (target === 's' ? academic : personal)[key] = row[key];
+        const normalise = DIGIT_ONLY_PERSONAL[key];
+        (target === 's' ? academic : personal)[key] = normalise ? normalise(row[key]) : row[key];
       }
       academic.usn = usn; // normalized (NULL when blank)
       // year-wise csn: honour a csn_year column if present, else current year

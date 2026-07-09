@@ -27,6 +27,9 @@ router.use('/activity', requireRole('admin'), require('./activityRoutes'));
 // Dashboard overview — any authenticated user may read it.
 router.use('/dashboard', require('./dashboardRoutes'));
 
+// Custom fields: readable by all (forms render from them), admin-only to change.
+router.use('/custom-fields', require('./customFieldRoutes'));
+
 // Feature-rich modules
 router.use('/students', admission, require('./studentRoutes'));
 router.use('/fees', admission, require('./feeRoutes'));

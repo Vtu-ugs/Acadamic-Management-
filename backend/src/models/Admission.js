@@ -1,6 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 const { batchYearFromCsn } = require('../utils/csn');
+const { customFieldsAttribute } = require('../utils/customFields');
 
 // 5.3 ADMISSION
 const Admission = sequelize.define('admission', {
@@ -20,6 +21,7 @@ const Admission = sequelize.define('admission', {
   outside_state:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   hostel_needed:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   hostel_allocated:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  custom_fields:     customFieldsAttribute(),
 });
 
 // The batch (academic_year) follows the CSN's year prefix: CSN 2026xxxx belongs

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import Modal from '../components/Modal.jsx';
+import CustomFields from '../components/CustomFields.jsx';
+import { digitsOnly, normalizeMobile } from '../utils/digits.js';
 
 // Dropdown choices for constrained personal-detail fields
 const PERSONAL_OPTIONS = {
@@ -41,6 +43,16 @@ const PERSONAL_FIELDS = [
   ['aadhar_no', 'Aadhar No', 'text', true],
 ];
 
+// `pattern` alone only complains on submit, so these fields are also filtered as
+// the user types: special characters never land in the value at all.
+const SANITIZERS = {
+  student_mobile: normalizeMobile,
+  parent_mobile: normalizeMobile,
+  aadhar_no: (raw) => digitsOnly(raw, 12),
+};
+
+const sanitize = (key, raw) => (SANITIZERS[key] ? SANITIZERS[key](raw) : raw);
+
 // Extra HTML5 validation attributes for phone & Aadhaar fields.
 const validationProps = (key) => {
   if (key === 'student_mobile' || key === 'parent_mobile') {
@@ -54,6 +66,7 @@ const validationProps = (key) => {
 
 const emptyForm = {
   first_name: '', last_name: '', course_id: '', usn: '', year: '',
+  custom_fields: {},
   personal: {
     father_name: '', mother_name: '', gender: '', religion: '', category: '', caste: '',
     date_of_birth: '', email_id: '', student_mobile: '', parent_mobile: '',
@@ -89,6 +102,7 @@ export default function Students() {
       last_name: parts.join(' '),
       course_id: s.course_id,
       usn: s.usn || '', year: semesterToYear(s.semester),
+      custom_fields: s.custom_fields || {},
       personal: s.student_personal_detail || { ...emptyForm.personal },
     });
   };
@@ -103,6 +117,7 @@ export default function Students() {
         course_id: Number(editing.course_id),
         usn: editing.usn,
         semester: yearToSemester(editing.year),
+        custom_fields: editing.custom_fields,
         personal: editing.personal,
       };
       if (editing.csn) await api.put(`/students/${editing.csn}`, payload);
@@ -226,7 +241,10 @@ export default function Students() {
                   ) : (
                     <input type={type || 'text'} required={required} {...validationProps(key)}
                       value={editing.personal[key] || ''}
-                      onChange={(e) => setEditing({ ...editing, personal: { ...editing.personal, [key]: e.target.value } })} />
+                      onChange={(e) => setEditing({
+                        ...editing,
+                        personal: { ...editing.personal, [key]: sanitize(key, e.target.value) },
+                      })} />
                   )}
                 </Field>
               ))}
@@ -241,6 +259,10 @@ export default function Students() {
                     onChange={(e) => setEditing({ ...editing, personal: { ...editing.personal, [key]: e.target.value } })} />
                 </Field>
               ))}
+            </div>
+            <div className="form-grid">
+              <CustomFields entity="student" values={editing.custom_fields}
+                onChange={(cf) => setEditing({ ...editing, custom_fields: cf })} />
             </div>
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
               <button type="submit">Save</button>

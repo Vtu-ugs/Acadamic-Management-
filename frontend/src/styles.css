@@ -85,6 +85,9 @@ button:hover { background: var(--primary-light); }
 button.secondary { background: #6b7785; }
 button.danger { background: var(--danger); }
 button.link { background: none; color: var(--primary-light); padding: 2px 4px; text-decoration: underline; }
+/* Destructive row action: same link shape, but it must not read as neutral.
+   Needs both classes — button.link's background:none otherwise wins on order. */
+button.link.danger { background: none; color: var(--danger); }
 
 .row-actions { display: flex; gap: 6px; }
 .toolbar { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }

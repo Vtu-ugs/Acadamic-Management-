@@ -14,6 +14,7 @@ import Staff from './pages/Staff.jsx';
 import Coordinators from './pages/Coordinators.jsx';
 import Diary from './pages/Diary.jsx';
 import Users from './pages/Users.jsx';
+import CustomFieldsAdmin from './pages/CustomFieldsAdmin.jsx';
 import ActivityLog from './pages/ActivityLog.jsx';
 import ChangePassword from './pages/ChangePassword.jsx';
 import Login from './pages/Login.jsx';
@@ -36,6 +37,8 @@ const nav = [
   { to: '/usn-pending', label: 'USN Pending', element: <UsnPending /> },
   { to: '/import-export', label: 'Import / Export', element: <ImportExport /> },
   { to: '/users', label: 'User Management', element: <Users /> },
+  // Admin-only: listed in no ROLE_ROUTES allowlist, and admin's allowlist is null (all).
+  { to: '/custom-fields', label: 'Custom Fields', element: <CustomFieldsAdmin /> },
   { to: '/activity', label: 'Activity Log', element: <ActivityLog /> },
   { to: '/change-password', label: 'Change Password', element: <ChangePassword /> },
 ];

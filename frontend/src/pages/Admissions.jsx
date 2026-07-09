@@ -3,6 +3,7 @@ import { api } from '../api';
 import { useApi } from '../components/useApi.js';
 import Modal from '../components/Modal.jsx';
 import SearchSelect from '../components/SearchSelect.jsx';
+import CustomFields from '../components/CustomFields.jsx';
 
 // Reservation categories used for the admitted-seat dropdown.
 const CATEGORIES = ['General', 'OBC', 'SC', 'ST', 'Cat-1', '2A', '2B', '3A', '3B', 'Others'];
@@ -25,7 +26,7 @@ const blank = {
   adm_id: null, csn: '', course_id: '', kea_ad_no: '', academic_year: '', admission_date: '',
   admission_mode: '', entry_type: 'Regular', actual_category: '', admitted_category: '',
   loan_provider_name: '', available_loan: '', outside_country: false, outside_state: false,
-  hostel_needed: false, hostel_allocated: false,
+  hostel_needed: false, hostel_allocated: false, custom_fields: {},
 };
 
 // 5.3 ADMISSION (FR-S5, FR-F8)
@@ -68,7 +69,7 @@ export default function Admissions() {
       admitted_category: row.admitted_category || '', loan_provider_name: row.loan_provider_name || '',
       available_loan: row.available_loan ?? '', outside_country: !!row.outside_country,
       outside_state: !!row.outside_state, hostel_needed: !!row.hostel_needed,
-      hostel_allocated: !!row.hostel_allocated,
+      hostel_allocated: !!row.hostel_allocated, custom_fields: row.custom_fields || {},
     });
   };
 
@@ -205,6 +206,9 @@ export default function Admissions() {
               <div className="field"><label>Hostel Allocated</label>
                 <input type="checkbox" disabled={!form.hostel_needed} checked={form.hostel_allocated}
                   onChange={(e) => setForm({ ...form, hostel_allocated: e.target.checked })} /></div>
+
+              <CustomFields entity="admission" values={form.custom_fields}
+                onChange={(cf) => setForm({ ...form, custom_fields: cf })} />
             </div>
             {formError && <div className="error">{formError}</div>}
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>

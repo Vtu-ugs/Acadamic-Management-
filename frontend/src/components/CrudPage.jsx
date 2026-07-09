@@ -121,8 +121,15 @@ export default function CrudPage({ title, subtitle, path, pk, columns, fields, f
                     <textarea value={editing[f.key] ?? ''}
                       onChange={(e) => setEditing({ ...editing, [f.key]: e.target.value })} />
                   ) : (
+                    // `sanitize` rewrites the value on every keystroke and paste, so
+                    // characters a field doesn't accept never enter it. `digits` is
+                    // presentational (numeric keypad, length cap).
                     <input type={f.type || 'text'} required={f.required} value={editing[f.key] ?? ''}
-                      onChange={(e) => setEditing({ ...editing, [f.key]: e.target.value })} />
+                      {...(f.digits ? { inputMode: 'numeric', maxLength: f.digits } : {})}
+                      onChange={(e) => setEditing({
+                        ...editing,
+                        [f.key]: f.sanitize ? f.sanitize(e.target.value) : e.target.value,
+                      })} />
                   )}
                 </div>
               ))}

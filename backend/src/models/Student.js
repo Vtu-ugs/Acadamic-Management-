@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
+const { customFieldsAttribute } = require('../utils/customFields');
 
 // 5.1 STUDENT — usn is nullable & unique-when-present
 // csn is application-generated (year-wise running number, e.g. 20260001),
@@ -13,6 +14,7 @@ const Student = sequelize.define('student', {
     type: DataTypes.INTEGER,
     validate: { min: 1, max: 8 },
   },
+  custom_fields: customFieldsAttribute(),
 });
 
 module.exports = Student;

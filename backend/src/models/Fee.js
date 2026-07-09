@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
+const { customFieldsAttribute } = require('../utils/customFields');
 
 // 5.4 FEE
 const Fee = sequelize.define('fee', {
@@ -16,6 +17,7 @@ const Fee = sequelize.define('fee', {
   payment_status:   { type: DataTypes.STRING(20) },
   academic_year:    { type: DataTypes.STRING(10) },
   receipt_date:     { type: DataTypes.DATEONLY },
+  custom_fields:    customFieldsAttribute(),
 });
 
 module.exports = Fee;

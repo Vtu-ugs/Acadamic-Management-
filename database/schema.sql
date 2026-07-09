@@ -56,6 +56,7 @@ CREATE TABLE student (
   course_id    INT NOT NULL,
   usn          VARCHAR(20) UNIQUE,             -- NULL until university allots it
   semester     INT CHECK (semester BETWEEN 1 AND 8),
+  custom_fields JSON,                          -- admin-defined extra fields (see custom_field)
   CONSTRAINT fk_student_course FOREIGN KEY (course_id)
     REFERENCES courses(course_id)
 ) ENGINE=InnoDB;
@@ -103,6 +104,7 @@ CREATE TABLE admission (
   outside_state     BOOLEAN NOT NULL DEFAULT FALSE,
   hostel_needed     BOOLEAN NOT NULL DEFAULT FALSE,
   hostel_allocated  BOOLEAN NOT NULL DEFAULT FALSE, -- only meaningful when hostel_needed
+  custom_fields     JSON,                      -- admin-defined extra fields (see custom_field)
   CONSTRAINT fk_adm_student FOREIGN KEY (csn)
     REFERENCES student(csn) ON DELETE CASCADE,
   CONSTRAINT fk_adm_course FOREIGN KEY (course_id)
@@ -126,8 +128,28 @@ CREATE TABLE fee (
   payment_status   VARCHAR(20),                -- Paid / Pending / Partial
   academic_year    VARCHAR(10),
   receipt_date     DATE,
+  custom_fields    JSON,                        -- admin-defined extra fields (see custom_field)
   CONSTRAINT fk_fee_admission FOREIGN KEY (adm_id)
     REFERENCES admission(adm_id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
+-- CUSTOM_FIELD — admin-defined extra fields for student / admission / fee.
+-- Values live in the owning row's `custom_fields` JSON column, keyed by
+-- field_key, so adding or retiring a field never runs DDL.
+-- Retiring a field sets is_active = FALSE: it vanishes from the forms and
+-- exports but its stored values survive and return if it is restored.
+-- ---------------------------------------------------------------------
+CREATE TABLE custom_field (
+  cf_id      INT AUTO_INCREMENT PRIMARY KEY,
+  entity     VARCHAR(20)  NOT NULL,            -- student / admission / fee
+  field_key  VARCHAR(50)  NOT NULL,            -- snake_case key inside custom_fields
+  label      VARCHAR(100) NOT NULL,            -- what admissions staff see
+  field_type VARCHAR(20)  NOT NULL DEFAULT 'text', -- text/number/date/checkbox/select
+  options    TEXT,                             -- comma-separated choices, select only
+  is_active  BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order INT NOT NULL DEFAULT 0,
+  CONSTRAINT uq_custom_field UNIQUE (entity, field_key)
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------

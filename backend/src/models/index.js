@@ -12,6 +12,8 @@ const AcademicCoordinator = require('./AcademicCoordinator');
 const WeeklyDiary = require('./WeeklyDiary');
 const AppUser = require('./AppUser');
 const ActivityLog = require('./ActivityLog');
+const CustomField = require('./CustomField');
+const { attachCustomFields } = require('../utils/customFields');
 
 // ------- Associations (mirror Section 5.10 ER summary) -------
 
@@ -56,8 +58,16 @@ WeeklyDiary.belongsTo(Staff, { as: 'approver', foreignKey: 'approved_by' });
 AppUser.belongsTo(Staff, { foreignKey: 'staff_id' });
 Staff.hasOne(AppUser, { foreignKey: 'staff_id' });
 
+// ------- Admin-defined custom fields -------
+// Sanitising/merging lives in a beforeSave hook so every write path — the
+// forms, the Excel import, a raw API call — obeys the same rules.
+attachCustomFields(Student, 'student');
+attachCustomFields(Admission, 'admission');
+attachCustomFields(Fee, 'fee');
+
 module.exports = {
   sequelize,
+  CustomField,
   Course,
   Staff,
   Student,

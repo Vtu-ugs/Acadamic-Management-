@@ -1,4 +1,5 @@
 import CrudPage, { useOptions } from '../components/CrudPage.jsx';
+import { normalizeMobile } from '../utils/digits.js';
 
 // 5.8 STAFF — faculty master (FR-X1)
 export default function Staff() {
@@ -23,7 +24,7 @@ export default function Staff() {
         { key: 'course_id', label: 'Course', type: 'select', required: true, options: courseOptions },
         { key: 'designation', label: 'Designation' },
         { key: 'email', label: 'Email' },
-        { key: 'mobile', label: 'Mobile' },
+        { key: 'mobile', label: 'Mobile', type: 'tel', digits: 10, sanitize: normalizeMobile },
         // Login credentials the staff will use to sign in and update their diary.
         { key: 'login_username', label: 'Login Username' },
         { key: 'login_password', label: 'Login Password (min 8, unique — blank keeps current)', type: 'password' },

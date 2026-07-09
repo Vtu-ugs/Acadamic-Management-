@@ -3,6 +3,7 @@ import { api, fileUrl } from '../api';
 import { useApi } from '../components/useApi.js';
 import Modal from '../components/Modal.jsx';
 import SearchSelect from '../components/SearchSelect.jsx';
+import CustomFields from '../components/CustomFields.jsx';
 
 const STATUSES = ['', 'Paid', 'Partial', 'Pending'];
 const PROGRAM_YEARS = [1, 2, 3, 4];
@@ -10,6 +11,7 @@ const inr = (v) => (v == null || v === '' ? '—' : `₹${Number(v).toLocaleStri
 const blank = {
   adm_id: '', program_year: '', kea_fee: '', regn_fee: '', tuition_fee: '', total_course_fee: '',
   pending_due: '', carry_forward: '', receipt_number: '', payment_status: '', academic_year: '', receipt_date: '',
+  custom_fields: {},
 };
 
 export default function Fees() {
@@ -234,6 +236,9 @@ export default function Fees() {
                 <input value={form.academic_year} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} /></div>
               <div className="field"><label>Receipt Date</label>
                 <input type="date" value={form.receipt_date} onChange={(e) => setForm({ ...form, receipt_date: e.target.value })} /></div>
+
+              <CustomFields entity="fee" values={form.custom_fields}
+                onChange={(cf) => setForm({ ...form, custom_fields: cf })} />
             </div>
             {formError && <div className="error">{formError}</div>}
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>

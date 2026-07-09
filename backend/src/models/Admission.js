@@ -18,6 +18,8 @@ const Admission = sequelize.define('admission', {
   available_loan:    { type: DataTypes.DECIMAL(10, 2) },
   outside_country:   { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   outside_state:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  hostel_needed:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  hostel_allocated:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
 });
 
 // The batch (academic_year) follows the CSN's year prefix: CSN 2026xxxx belongs
@@ -29,6 +31,8 @@ Admission.beforeSave((adm) => {
     const batch = batchYearFromCsn(adm.csn);
     if (batch) adm.academic_year = batch;
   }
+  // A room can't be allocated to a student who hasn't asked for one.
+  if (!adm.hostel_needed) adm.hostel_allocated = false;
 });
 
 module.exports = Admission;

@@ -18,7 +18,10 @@ const COLUMNS = {
 const ADMISSION_FIELDS = [
   'kea_ad_no', 'academic_year', 'admission_mode', 'entry_type', 'actual_category',
   'admitted_category', 'loan_provider_name', 'available_loan',
-  'outside_country', 'outside_state',
+  'outside_country', 'outside_state', 'hostel_needed', 'hostel_allocated',
+];
+const ADMISSION_BOOL_FIELDS = [
+  'outside_country', 'outside_state', 'hostel_needed', 'hostel_allocated',
 ];
 // Fee columns are prefixed `fee_`.
 const FEE_FIELDS = [
@@ -74,6 +77,8 @@ exports.exportStudents = async (req, res) => {
       adm_available_loan: adm.available_loan ?? '',
       adm_outside_country: adm.adm_id ? (adm.outside_country ? 'Yes' : 'No') : '',
       adm_outside_state: adm.adm_id ? (adm.outside_state ? 'Yes' : 'No') : '',
+      adm_hostel_needed: adm.adm_id ? (adm.hostel_needed ? 'Yes' : 'No') : '',
+      adm_hostel_allocated: adm.adm_id ? (adm.hostel_allocated ? 'Yes' : 'No') : '',
       // ----- fee -----
       fee_kea_fee: fee.kea_fee ?? '',
       fee_regn_fee: fee.regn_fee ?? '',
@@ -105,7 +110,7 @@ function pickAdmission(row) {
     const v = row[`adm_${f}`];
     if (v == null || v === '') continue;
     has = true;
-    if (f === 'outside_country' || f === 'outside_state') data[f] = toBool(v);
+    if (ADMISSION_BOOL_FIELDS.includes(f)) data[f] = toBool(v);
     else if (f === 'available_loan') data[f] = Number(v);
     else data[f] = v;
   }

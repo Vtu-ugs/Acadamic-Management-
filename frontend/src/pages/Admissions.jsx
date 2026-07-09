@@ -15,10 +15,17 @@ const batchYearFromCsn = (csn) => {
   return `${year}-${String((year + 1) % 100).padStart(2, '0')}`;
 };
 
+// Hostel status at a glance — "Awaiting" is the row staff need to act on.
+const hostelStatus = (r) => {
+  if (!r.hostel_needed) return '-';
+  return r.hostel_allocated ? 'Allocated' : 'Awaiting';
+};
+
 const blank = {
   adm_id: null, csn: '', course_id: '', kea_ad_no: '', academic_year: '', admission_date: '',
   admission_mode: '', entry_type: 'Regular', actual_category: '', admitted_category: '',
   loan_provider_name: '', available_loan: '', outside_country: false, outside_state: false,
+  hostel_needed: false, hostel_allocated: false,
 };
 
 // 5.3 ADMISSION (FR-S5, FR-F8)
@@ -60,7 +67,8 @@ export default function Admissions() {
       entry_type: row.entry_type || 'Regular', actual_category: row.actual_category || '',
       admitted_category: row.admitted_category || '', loan_provider_name: row.loan_provider_name || '',
       available_loan: row.available_loan ?? '', outside_country: !!row.outside_country,
-      outside_state: !!row.outside_state,
+      outside_state: !!row.outside_state, hostel_needed: !!row.hostel_needed,
+      hostel_allocated: !!row.hostel_allocated,
     });
   };
 
@@ -105,7 +113,7 @@ export default function Admissions() {
             <thead>
               <tr>
                 <th>Sl. No</th><th>CSN</th><th>Student</th><th>Course</th><th>Year</th>
-                <th>Mode</th><th>Entry</th><th>Category</th><th>Loan</th><th>Actions</th>
+                <th>Mode</th><th>Entry</th><th>Category</th><th>Loan</th><th>Hostel</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -120,13 +128,14 @@ export default function Admissions() {
                   <td>{r.entry_type}</td>
                   <td>{r.admitted_category || r.actual_category || '-'}</td>
                   <td>{r.available_loan}</td>
+                  <td>{hostelStatus(r)}</td>
                   <td className="row-actions">
                     <button className="link" onClick={() => openEdit(r)}>Edit</button>
                     <button className="link" onClick={() => remove(r.adm_id)}>Delete</button>
                   </td>
                 </tr>
               ))}
-              {data?.length === 0 && <tr><td colSpan="10" className="muted">No admissions.</td></tr>}
+              {data?.length === 0 && <tr><td colSpan="11" className="muted">No admissions.</td></tr>}
             </tbody>
           </table>
         )}
@@ -184,6 +193,18 @@ export default function Admissions() {
               <div className="field"><label>Outside State</label>
                 <input type="checkbox" checked={form.outside_state}
                   onChange={(e) => setForm({ ...form, outside_state: e.target.checked })} /></div>
+
+              <div className="field"><label>Hostel Needed</label>
+                <input type="checkbox" checked={form.hostel_needed}
+                  onChange={(e) => setForm({
+                    ...form,
+                    hostel_needed: e.target.checked,
+                    // A room can't stay allocated once the student says they don't need one.
+                    hostel_allocated: e.target.checked && form.hostel_allocated,
+                  })} /></div>
+              <div className="field"><label>Hostel Allocated</label>
+                <input type="checkbox" disabled={!form.hostel_needed} checked={form.hostel_allocated}
+                  onChange={(e) => setForm({ ...form, hostel_allocated: e.target.checked })} /></div>
             </div>
             {formError && <div className="error">{formError}</div>}
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>

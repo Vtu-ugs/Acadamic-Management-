@@ -38,7 +38,8 @@ export default function ImportExport() {
           student_mobile, parent_mobile, blood_group, aadhar_no.
           <br /><b>Admission (optional, adm_*):</b> adm_kea_ad_no, adm_academic_year,
           adm_admission_mode, adm_entry_type (Regular/Lateral), adm_actual_category, adm_admitted_category, adm_loan_provider_name,
-          adm_available_loan, adm_outside_country (Yes/No), adm_outside_state (Yes/No).
+          adm_available_loan, adm_outside_country (Yes/No), adm_outside_state (Yes/No),
+          adm_hostel_needed (Yes/No), adm_hostel_allocated (Yes/No).
           <br /><b>Fee (optional, fee_*, needs admission columns):</b> fee_kea_fee, fee_regn_fee,
           fee_tuition_fee, fee_total_course_fee, fee_pending_due (auto if blank),
           fee_receipt_number (auto if blank), fee_payment_status (auto if blank),

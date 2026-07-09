@@ -101,6 +101,8 @@ CREATE TABLE admission (
   available_loan    DECIMAL(10,2),
   outside_country   BOOLEAN NOT NULL DEFAULT FALSE,
   outside_state     BOOLEAN NOT NULL DEFAULT FALSE,
+  hostel_needed     BOOLEAN NOT NULL DEFAULT FALSE,
+  hostel_allocated  BOOLEAN NOT NULL DEFAULT FALSE, -- only meaningful when hostel_needed
   CONSTRAINT fk_adm_student FOREIGN KEY (csn)
     REFERENCES student(csn) ON DELETE CASCADE,
   CONSTRAINT fk_adm_course FOREIGN KEY (course_id)

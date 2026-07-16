@@ -2,7 +2,8 @@ const { Op } = require('sequelize');
 const {
   sequelize, Student, StudentPersonalDetails, Admission, Course, Fee,
 } = require('../models');
-const { generateCsn, withCsnRetry } = require('../utils/csn');
+const { generateDsn, withDsnRetry } = require('../utils/dsn');
+const { isPaged, parsePagination } = require('../utils/paginate');
 
 // FR-S4: list all students across all courses (with optional course/semester filters)
 exports.list = async (req, res) => {
@@ -10,18 +11,22 @@ exports.list = async (req, res) => {
   if (req.query.course_id) where.course_id = req.query.course_id;
   if (req.query.semester) where.semester = req.query.semester;
 
-  const students = await Student.findAll({
-    where,
-    include: [
-      { model: Course },
-      { model: StudentPersonalDetails },
-    ],
-    order: [['csn', 'ASC']],
-  });
+  const include = [{ model: Course }, { model: StudentPersonalDetails }];
+
+  // Opt-in pagination (see utils/paginate); plain array otherwise.
+  if (isPaged(req.query)) {
+    const { page, pageSize, limit, offset } = parsePagination(req.query);
+    const { rows, count } = await Student.findAndCountAll({
+      where, include, order: [['dsn', 'ASC']], limit, offset, distinct: true,
+    });
+    return res.json({ rows, total: count, page, pageSize });
+  }
+
+  const students = await Student.findAll({ where, include, order: [['dsn', 'ASC']] });
   res.json(students);
 };
 
-// FR-S3: quick search — USN first, then name, student mobile, parent mobile, csn
+// FR-S3: quick search — USN first, then name, student mobile, parent mobile, dsn
 exports.search = async (req, res) => {
   const q = (req.query.q || '').trim();
   if (!q) return res.json([]);
@@ -32,7 +37,7 @@ exports.search = async (req, res) => {
       [Op.or]: [
         { usn: { [Op.like]: `%${q}%` } },
         { student_name: { [Op.like]: `%${q}%` } },
-        ...(Number.isInteger(Number(q)) ? [{ csn: Number(q) }] : []),
+        ...(Number.isInteger(Number(q)) ? [{ dsn: Number(q) }] : []),
         { '$student_personal_detail.student_mobile$': { [Op.like]: `%${q}%` } },
         { '$student_personal_detail.parent_mobile$': { [Op.like]: `%${q}%` } },
       ],
@@ -49,7 +54,7 @@ exports.branchStats = async (_req, res) => {
   const [courses, students, fees] = await Promise.all([
     Course.findAll({ order: [['course_name', 'ASC']], raw: true }),
     Student.findAll({
-      attributes: ['csn', 'course_id'],
+      attributes: ['dsn', 'course_id'],
       include: [{ model: StudentPersonalDetails, attributes: ['category'] }],
       raw: true,
       nest: true,
@@ -99,17 +104,25 @@ exports.branchStats = async (_req, res) => {
 };
 
 // FR-S3a: students with USN pending (usn IS NULL)
-exports.usnPending = async (_req, res) => {
-  const students = await Student.findAll({
-    where: { usn: { [Op.is]: null } },
-    include: [{ model: Course }, { model: StudentPersonalDetails }],
-    order: [['csn', 'ASC']],
-  });
+exports.usnPending = async (req, res) => {
+  const where = { usn: { [Op.is]: null } };
+  const include = [{ model: Course }, { model: StudentPersonalDetails }];
+
+  // Opt-in pagination (see utils/paginate); plain array otherwise.
+  if (isPaged(req.query)) {
+    const { page, pageSize, limit, offset } = parsePagination(req.query);
+    const { rows, count } = await Student.findAndCountAll({
+      where, include, order: [['dsn', 'ASC']], limit, offset, distinct: true,
+    });
+    return res.json({ rows, total: count, page, pageSize });
+  }
+
+  const students = await Student.findAll({ where, include, order: [['dsn', 'ASC']] });
   res.json(students);
 };
 
 exports.getOne = async (req, res) => {
-  const student = await Student.findByPk(req.params.csn, {
+  const student = await Student.findByPk(req.params.dsn, {
     include: [
       { model: Course },
       { model: StudentPersonalDetails },
@@ -121,24 +134,24 @@ exports.getOne = async (req, res) => {
 };
 
 // FR-S1: add student (academic + personal) — usn left NULL at admission.
-// csn is generated as a year-wise running number (e.g. 20260001); an optional
-// `csn_year` in the body overrides the calendar year used for the prefix.
+// dsn is generated as a year-wise running number (e.g. 20260001); an optional
+// `dsn_year` in the body overrides the calendar year used for the prefix.
 exports.create = async (req, res) => {
-  const { personal = {}, csn_year, csn: _ignore, ...academic } = req.body;
+  const { personal = {}, dsn_year, dsn: _ignore, ...academic } = req.body;
   if (academic.usn === '') academic.usn = null;
-  const year = csn_year ? Number(csn_year) : new Date().getFullYear();
+  const year = dsn_year ? Number(dsn_year) : new Date().getFullYear();
 
-  const result = await withCsnRetry(() => sequelize.transaction(async (t) => {
-    const csn = await generateCsn(t, year);
-    const student = await Student.create({ ...academic, csn }, { transaction: t });
+  const result = await withDsnRetry(() => sequelize.transaction(async (t) => {
+    const dsn = await generateDsn(t, year);
+    const student = await Student.create({ ...academic, dsn }, { transaction: t });
     await StudentPersonalDetails.create(
-      { ...personal, csn: student.csn },
+      { ...personal, dsn: student.dsn },
       { transaction: t }
     );
     return student;
   }));
 
-  const created = await Student.findByPk(result.csn, {
+  const created = await Student.findByPk(result.dsn, {
     include: [{ model: StudentPersonalDetails }, { model: Course }],
   });
   res.status(201).json(created);
@@ -149,22 +162,22 @@ exports.update = async (req, res) => {
   const { personal, ...academic } = req.body;
   if (academic.usn === '') academic.usn = null;
 
-  const student = await Student.findByPk(req.params.csn);
+  const student = await Student.findByPk(req.params.dsn);
   if (!student) return res.status(404).json({ error: 'Student not found' });
 
   await sequelize.transaction(async (t) => {
     await student.update(academic, { transaction: t });
     if (personal) {
       const [spd] = await StudentPersonalDetails.findOrCreate({
-        where: { csn: student.csn },
-        defaults: { csn: student.csn },
+        where: { dsn: student.dsn },
+        defaults: { dsn: student.dsn },
         transaction: t,
       });
       await spd.update(personal, { transaction: t });
     }
   });
 
-  const updated = await Student.findByPk(student.csn, {
+  const updated = await Student.findByPk(student.dsn, {
     include: [{ model: StudentPersonalDetails }, { model: Course }],
   });
   res.json(updated);
@@ -175,12 +188,12 @@ exports.updateUsn = async (req, res) => {
   const { usn } = req.body;
   if (!usn) return res.status(400).json({ error: 'usn is required' });
 
-  const student = await Student.findByPk(req.params.csn);
+  const student = await Student.findByPk(req.params.dsn);
   if (!student) return res.status(404).json({ error: 'Student not found' });
 
   const dup = await Student.findOne({ where: { usn } });
-  if (dup && dup.csn !== student.csn) {
-    return res.status(409).json({ error: `USN ${usn} already assigned to CSN ${dup.csn}` });
+  if (dup && dup.dsn !== student.dsn) {
+    return res.status(409).json({ error: `USN ${usn} already assigned to DSN ${dup.dsn}` });
   }
 
   await student.update({ usn });
@@ -188,7 +201,7 @@ exports.updateUsn = async (req, res) => {
 };
 
 exports.remove = async (req, res) => {
-  const deleted = await Student.destroy({ where: { csn: req.params.csn } });
+  const deleted = await Student.destroy({ where: { dsn: req.params.dsn } });
   if (!deleted) return res.status(404).json({ error: 'Student not found' });
   res.status(204).end();
 };

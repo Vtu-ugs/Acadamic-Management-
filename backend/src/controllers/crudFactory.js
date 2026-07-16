@@ -1,3 +1,5 @@
+const { isPaged, parsePagination } = require('../utils/paginate');
+
 // Generic CRUD controller factory for straightforward entities.
 // `pk` is the primary-key column name; `include` is optional eager-load config.
 module.exports = function crudFactory(Model, pk, include = []) {
@@ -7,6 +9,16 @@ module.exports = function crudFactory(Model, pk, include = []) {
       // allow simple equality filters via query string on real columns
       for (const key of Object.keys(req.query)) {
         if (Model.rawAttributes[key]) where[key] = req.query[key];
+      }
+      // Opt-in pagination: returns an envelope only when page/pageSize is asked
+      // for, so lookup callers that expect a plain array keep working.
+      if (isPaged(req.query)) {
+        const { page, pageSize, limit, offset } = parsePagination(req.query);
+        // `distinct` keeps the count correct when an include multiplies rows.
+        const { rows, count } = await Model.findAndCountAll({
+          where, include, limit, offset, order: [[pk, 'DESC']], distinct: true,
+        });
+        return res.json({ rows, total: count, page, pageSize });
       }
       const rows = await Model.findAll({ where, include });
       res.json(rows);

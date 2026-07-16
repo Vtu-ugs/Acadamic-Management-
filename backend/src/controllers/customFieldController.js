@@ -4,8 +4,15 @@ const { CUSTOM_FIELD_ENTITIES, FIELD_TYPES } = require('../models/CustomField');
 
 // Which table carries each entity's `custom_fields` column. Looked up from this
 // map — never interpolated from the request — so the raw SQL below can't be
-// steered at another table.
-const ENTITY_TABLES = { student: 'student', admission: 'admission', fee: 'fee' };
+// steered at another table. Note `course` lives in the plural `courses` table.
+const ENTITY_TABLES = {
+  student: 'student',
+  admission: 'admission',
+  fee: 'fee',
+  certificate: 'certificate',
+  staff: 'staff',
+  course: 'courses',
+};
 
 // A field_key becomes a JSON object key and a form input name, so keep it to a
 // conservative snake_case shape rather than whatever the admin typed.
@@ -112,14 +119,26 @@ exports.hide = async (req, res) => {
   res.json(field);
 };
 
+// Each entry is stored as { label, value }, so the entry itself exists even when
+// the field was left blank. `$."key"` addresses the entry; `$."key".value`
+// addresses what the user actually typed.
+const entryPath = (field) => `$."${field.field_key}"`;
+const valuePath = (field) => `$."${field.field_key}".value`;
+
 // How many rows currently hold a value for this field. The admin page asks
 // before offering to delete, so the confirmation can name a real number
-// instead of a vague warning.
+// instead of a vague warning. A row whose entry exists but is blank doesn't
+// count — deleting it loses nothing.
 async function countRowsWithValue(field) {
   const table = ENTITY_TABLES[field.entity];
+  // A blank field is stored as JSON null, and JSON_EXTRACT hands that back as a
+  // JSON null rather than a SQL NULL — so `IS NOT NULL` alone counts it as data.
+  // JSON_TYPE tells the two apart.
   const [[row]] = await sequelize.query(
-    `SELECT COUNT(*) AS n FROM \`${table}\` WHERE JSON_EXTRACT(custom_fields, ?) IS NOT NULL`,
-    { replacements: [`$."${field.field_key}"`] }
+    `SELECT COUNT(*) AS n FROM \`${table}\`
+      WHERE JSON_EXTRACT(custom_fields, ?) IS NOT NULL
+        AND JSON_TYPE(JSON_EXTRACT(custom_fields, ?)) <> 'NULL'`,
+    { replacements: [valuePath(field), valuePath(field)] }
   );
   return Number(row.n) || 0;
 }
@@ -141,7 +160,7 @@ exports.destroy = async (req, res) => {
   if (!field) return res.status(404).json({ error: 'Custom field not found' });
 
   const table = ENTITY_TABLES[field.entity];
-  const path = `$."${field.field_key}"`;
+  const path = entryPath(field);   // drop the whole { label, value } entry
   const removed = await countRowsWithValue(field);
 
   // Raw SQL on purpose: the beforeSave hook merges previous values forward, so

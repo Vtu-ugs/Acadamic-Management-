@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, fileUrl } from '../api';
-import { useApi } from '../components/useApi.js';
+import { usePagedApi } from '../components/useApi.js';
+import Pager from '../components/Pager.jsx';
+import { searchAdmissionOptions } from '../components/CrudPage.jsx';
 import Modal from '../components/Modal.jsx';
 import SearchSelect from '../components/SearchSelect.jsx';
 import CustomFields from '../components/CustomFields.jsx';
@@ -14,22 +16,33 @@ const blank = {
   custom_fields: {},
 };
 
+// Build the /fees query path from the active status filter + student search.
+const feesPath = (status, q) => {
+  const params = new URLSearchParams();
+  if (status) params.set('payment_status', status);
+  if (q) params.set('q', q);
+  const qs = params.toString();
+  return `/fees${qs ? `?${qs}` : ''}`;
+};
+
 export default function Fees() {
   const [status, setStatus] = useState('');
-  const { data: admissions } = useApi('/admissions');
-  const { data, loading, error, reload } = useApi(`/fees${status ? `?payment_status=${status}` : ''}`, [status]);
+  const [q, setQ] = useState('');               // search box input
+  const [submittedQ, setSubmittedQ] = useState(''); // the applied search term
+  const {
+    rows: data, total, page, pageSize, setPage, loading, error, reload,
+  } = usePagedApi(feesPath(status, submittedQ));
   const [form, setForm] = useState(null);
   const [formError, setFormError] = useState(null);
   const [structure, setStructure] = useState(null); // matched fee-structure slab
   const [carryForward, setCarryForward] = useState(0); // carry-forward from previous years
+  // The picked admission (from the server-side search), kept for its batch /
+  // entry-type context that drives the fee-structure lookup below.
+  const [selectedAdm, setSelectedAdm] = useState(null);
 
-  const selectedAdm = form && (admissions || []).find((a) => String(a.adm_id) === String(form.adm_id));
-
-  // Searchable by CSN, USN or name; keeps the entry-type / batch context in view.
-  const admissionOptions = (admissions || []).map((a) => ({
-    value: a.adm_id,
-    label: `CSN ${a.csn} · USN ${a.student?.usn || 'pending'} · ${a.student?.student_name || ''} — ${a.entry_type || 'Regular'} (${a.academic_year || 'batch ?'})`,
-  }));
+  const admLabel = (a) => (a
+    ? `DSN ${a.dsn} · USN ${a.student?.usn || 'pending'} · ${a.student?.student_name || ''} — ${a.entry_type || 'Regular'} (${a.academic_year || 'batch ?'})`
+    : '');
 
   // Look up the official fee slab whenever the student (entry type + batch) or
   // program year changes: Regular students draw Regular rows, Lateral draw Lateral.
@@ -91,7 +104,14 @@ export default function Fees() {
     catch (err) { setFormError(err.message); }
   };
 
-  const openForm = () => { setStructure(null); setCarryForward(0); setForm({ ...blank }); };
+  const openForm = () => { setStructure(null); setCarryForward(0); setSelectedAdm(null); setForm({ ...blank }); };
+
+  // Void a wrongly-entered receipt. The server re-nets that year's balance.
+  const voidFee = async (f) => {
+    if (!confirm(`Void receipt ${f.receipt_number}? This removes it and recalculates the year's balance.`)) return;
+    try { await api.del(`/fees/${f.fee_id}`); reload(); }
+    catch (err) { alert(err.message); }
+  };
 
   // Live financial preview. The year is billed at the official slab total (when
   // a slab exists); pending = slab total + carry-forward − amount paid so far.
@@ -107,6 +127,14 @@ export default function Fees() {
       <p className="page-sub">Record fees, auto-calc dues with carry-forward, print receipts (FR-F1 to FR-F4, FR-F7)</p>
 
       <div className="toolbar">
+        <div className="field" style={{ flex: 1 }}>
+          <label>Search student (name, USN, DSN)</label>
+          <input value={q} onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && setSubmittedQ(q.trim())}
+            placeholder="Type and press Enter…" />
+        </div>
+        <button onClick={() => setSubmittedQ(q.trim())}>Search</button>
+        <button className="secondary" onClick={() => { setQ(''); setSubmittedQ(''); }}>Clear</button>
         <div className="field">
           <label>Filter by status (FR-F7)</label>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -122,13 +150,13 @@ export default function Fees() {
         {loading ? <p className="muted">Loading…</p> : (
           <table>
             <thead>
-              <tr><th>Receipt</th><th>Student</th><th>Course</th><th>Year</th><th>Total</th><th>Carry Fwd</th><th>Pending</th><th>Status</th><th>Acad. Year</th><th>Receipt</th></tr>
+              <tr><th>Receipt</th><th>Student</th><th>Course</th><th>Year</th><th>Total</th><th>Carry Fwd</th><th>Pending</th><th>Status</th><th>Acad. Year</th><th>Receipt</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {data?.map((f) => (
                 <tr key={f.fee_id}>
                   <td>{f.receipt_number}</td>
-                  <td>{f.admission?.student?.student_name || `CSN ${f.admission?.csn}`}</td>
+                  <td>{f.admission?.student?.student_name || `DSN ${f.admission?.dsn}`}</td>
                   <td>{f.admission?.course?.course_name}</td>
                   <td>{f.program_year ? `Year ${f.program_year}` : '—'}</td>
                   <td>{inr(f.total_course_fee)}</td>
@@ -137,13 +165,15 @@ export default function Fees() {
                   <td><span className={`badge ${f.payment_status}`}>{f.payment_status}</span></td>
                   <td>{f.academic_year}</td>
                   <td><a href={fileUrl(`/fees/${f.fee_id}/receipt.pdf`)} target="_blank" rel="noreferrer">PDF</a></td>
+                  <td className="row-actions"><button className="link" onClick={() => voidFee(f)}>Void</button></td>
                 </tr>
               ))}
-              {data?.length === 0 && <tr><td colSpan="10" className="muted">No fee records.</td></tr>}
+              {data?.length === 0 && <tr><td colSpan="11" className="muted">No fee records.</td></tr>}
             </tbody>
           </table>
         )}
       </div>
+      <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} />
 
       {form && (
         <Modal title="Record Fee" onClose={() => setForm(null)}>
@@ -151,9 +181,10 @@ export default function Fees() {
             <div className="form-grid">
               <div className="field">
                 <label>Student *</label>
-                <SearchSelect required options={admissionOptions} value={form.adm_id}
-                  onChange={(v) => setForm({ ...form, adm_id: v })}
-                  placeholder="Search by CSN, USN or name…" />
+                <SearchSelect required asyncSearch={searchAdmissionOptions} value={form.adm_id}
+                  valueLabel={admLabel(selectedAdm)}
+                  onChange={(v, opt) => { setForm({ ...form, adm_id: v }); setSelectedAdm(opt?.data || null); }}
+                  placeholder="Search by DSN, USN or name…" />
               </div>
               <div className="field">
                 <label>Program Year *</label>

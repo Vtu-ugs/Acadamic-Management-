@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { api, fileUrl } from '../api';
-import { useApi } from '../components/useApi.js';
-import { useOptions } from '../components/CrudPage.jsx';
+import { usePagedApi } from '../components/useApi.js';
+import Pager from '../components/Pager.jsx';
+import { searchAdmissionOptions } from '../components/CrudPage.jsx';
 import Modal from '../components/Modal.jsx';
 import SearchSelect from '../components/SearchSelect.jsx';
+import CustomFields from '../components/CustomFields.jsx';
 
 const TYPES = ['Bonafide', 'TC', 'Probable Expenditure'];
 
@@ -15,12 +17,16 @@ const blankTc = {
   completion_year: '', reason_leaving: '', promotion_higher: '', conduct: '',
 };
 
-const blank = { adm_id: '', cert_type: 'Bonafide', issue_date: '', issued_by: '', remarks: '', tc: { ...blankTc } };
+const blank = {
+  adm_id: '', cert_type: 'Bonafide', issue_date: '', issued_by: '', remarks: '',
+  custom_fields: {}, tc: { ...blankTc },
+};
 
 // 5.5 CERTIFICATE (FR-C1 to FR-C6)
 export default function Certificates() {
-  const { admissionOptions } = useOptions();
-  const { data, loading, error, reload } = useApi('/certificates');
+  const {
+    rows: data, total, page, pageSize, setPage, loading, error, reload,
+  } = usePagedApi('/certificates');
   const [form, setForm] = useState(null);
   const [formError, setFormError] = useState(null);
   const [preview, setPreview] = useState(null); // { url, title } for the in-app PDF viewer
@@ -62,7 +68,7 @@ export default function Certificates() {
             <tbody>
               {data?.map((c, i) => {
                 const url = fileUrl(`/certificates/${c.cert_id}/document.pdf`);
-                const student = c.admission?.student?.student_name || `CSN ${c.admission?.csn}`;
+                const student = c.admission?.student?.student_name || `DSN ${c.admission?.dsn}`;
                 return (
                 <tr key={c.cert_id}>
                   <td>{i + 1}</td><td>{c.cert_type}</td>
@@ -82,6 +88,7 @@ export default function Certificates() {
           </table>
         )}
       </div>
+      <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} />
 
       {preview && (
         <Modal title={preview.title || 'Certificate Preview'} onClose={() => setPreview(null)}>
@@ -100,9 +107,9 @@ export default function Certificates() {
             <div className="form-grid">
               <div className="field">
                 <label>Student *</label>
-                <SearchSelect required options={admissionOptions} value={form.adm_id}
+                <SearchSelect required asyncSearch={searchAdmissionOptions} value={form.adm_id}
                   onChange={(v) => setForm({ ...form, adm_id: v })}
-                  placeholder="Search by CSN, USN or name…" />
+                  placeholder="Search by DSN, USN or name…" />
               </div>
               <div className="field">
                 <label>Type *</label>
@@ -116,6 +123,9 @@ export default function Certificates() {
                 <input value={form.issued_by} onChange={(e) => setForm({ ...form, issued_by: e.target.value })} /></div>
               <div className="field" style={{ gridColumn: '1 / -1' }}><label>Remarks / Purpose</label>
                 <textarea value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} /></div>
+
+              <CustomFields entity="certificate" values={form.custom_fields}
+                onChange={(cf) => setForm({ ...form, custom_fields: cf })} />
             </div>
 
             {form.cert_type === 'TC' && (

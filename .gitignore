@@ -18,6 +18,10 @@ npm-debug.log*
 # Runtime / uploads
 storage/
 
+# Docker DB seed dumps (may contain real data / password hashes)
+database/docker-init/*.sql
+ams_backup.sql
+
 # OS / editor junk
 .DS_Store
 Thumbs.db

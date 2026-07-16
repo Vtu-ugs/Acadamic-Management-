@@ -1,12 +1,12 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
-const { batchYearFromCsn } = require('../utils/csn');
+const { batchYearFromDsn } = require('../utils/dsn');
 const { customFieldsAttribute } = require('../utils/customFields');
 
 // 5.3 ADMISSION
 const Admission = sequelize.define('admission', {
   adm_id:            { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  csn:               { type: DataTypes.INTEGER, allowNull: false },
+  dsn:               { type: DataTypes.INTEGER, allowNull: false },
   course_id:         { type: DataTypes.INTEGER, allowNull: false },
   kea_ad_no:         { type: DataTypes.STRING(30) },
   academic_year:     { type: DataTypes.STRING(10) },
@@ -24,13 +24,13 @@ const Admission = sequelize.define('admission', {
   custom_fields:     customFieldsAttribute(),
 });
 
-// The batch (academic_year) follows the CSN's year prefix: CSN 2026xxxx belongs
-// to batch 2026-27, CSN 2027xxxx to 2027-28, and so on. Auto-fill it from the
-// CSN whenever it's left blank, so it never drifts from the student's CSN.
+// The batch (academic_year) follows the DSN's year prefix: DSN 2026xxxx belongs
+// to batch 2026-27, DSN 2027xxxx to 2027-28, and so on. Auto-fill it from the
+// DSN whenever it's left blank, so it never drifts from the student's DSN.
 // An explicitly supplied academic_year is preserved (existing records untouched).
 Admission.beforeSave((adm) => {
-  if (!adm.academic_year && adm.csn) {
-    const batch = batchYearFromCsn(adm.csn);
+  if (!adm.academic_year && adm.dsn) {
+    const batch = batchYearFromDsn(adm.dsn);
     if (batch) adm.academic_year = batch;
   }
   // A room can't be allocated to a student who hasn't asked for one.

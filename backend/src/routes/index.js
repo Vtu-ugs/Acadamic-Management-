@@ -2,7 +2,7 @@ const express = require('express');
 const crudFactory = require('../controllers/crudFactory');
 const genericRouter = require('./genericRoutes');
 const {
-  Course, Staff, Admission, AcademicCoordinator, WeeklyDiary, Student, FeeStructure,
+  Course, Staff, AcademicCoordinator, WeeklyDiary, FeeStructure,
 } = require('../models');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
@@ -41,9 +41,7 @@ router.use('/courses', genericRouter(crudFactory(Course, 'course_id')));
 router.use('/fee-structures', admission, genericRouter(crudFactory(FeeStructure, 'structure_id')));
 // Staff uses a dedicated controller (admin can add/delete staff + issue logins).
 router.use('/staff', staff, require('./staffRoutes'));
-router.use('/admissions', admission, genericRouter(
-  crudFactory(Admission, 'adm_id', [{ model: Student }, { model: Course }])
-));
+router.use('/admissions', admission, require('./admissionRoutes'));
 router.use('/coordinators', staff, genericRouter(
   crudFactory(AcademicCoordinator, 'co_id', [{ model: Course }, { model: Staff }])
 ));

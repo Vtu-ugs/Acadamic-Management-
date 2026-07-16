@@ -11,22 +11,22 @@ INSERT INTO staff (course_id, staff_name, designation, email, mobile) VALUES
   (1, 'Prof. Sneha Rao',  'Associate Professor', 'sneha.rao@inst.edu',    '9800000002'),
   (3, 'Dr. Ravi Shankar', 'Professor & HOD',     'ravi.shankar@inst.edu', '9800000003');
 
--- csn uses the year-wise running-number format: YYYY + 4-digit sequence.
+-- dsn uses the year-wise running-number format: YYYY + 4-digit sequence.
 -- Student WITH usn (allotted)
-INSERT INTO student (csn, student_name, course_id, usn, semester) VALUES
+INSERT INTO student (dsn, student_name, course_id, usn, semester) VALUES
   (20260001, 'Karthik B K', 1, '1AB22CS001', 4);
 -- Student WITHOUT usn (USN pending)
-INSERT INTO student (csn, student_name, course_id, usn, semester) VALUES
+INSERT INTO student (dsn, student_name, course_id, usn, semester) VALUES
   (20260002, 'Meghana S', 3, NULL, 1);
 
 INSERT INTO student_personal_details
-  (csn, father_name, mother_name, gender, religion, category, date_of_birth, email_id, student_mobile, parent_mobile, blood_group, aadhar_no)
+  (dsn, father_name, mother_name, gender, religion, category, date_of_birth, email_id, student_mobile, parent_mobile, blood_group, aadhar_no)
 VALUES
   (20260001, 'Gangadhara K S', 'Lakshmi', 'Male',   'Hindu', 'General', '2004-05-12', 'karthik@stu.edu', '9888800001', '9888800010', 'B+',  '111122223333'),
   (20260002, 'Suresh M',       'Geetha',  'Female', 'Hindu', 'OBC',     '2003-08-21', 'meghana@stu.edu', '9888800002', '9888800020', 'O+',  '444455556666');
 
 INSERT INTO admission
-  (csn, course_id, kea_ad_no, academic_year, admission_mode, entry_type, actual_category, admitted_category, available_loan, outside_state)
+  (dsn, course_id, kea_ad_no, academic_year, admission_mode, entry_type, actual_category, admitted_category, available_loan, outside_state)
 VALUES
   (20260001, 1, 'KEA2024001', '2024-25', 'CET',        'Regular', 'General', 'General', 0,      FALSE),
   (20260002, 3, 'KEA2024050', '2024-25', 'Management', 'Lateral', 'OBC',     'OBC',     150000, TRUE);

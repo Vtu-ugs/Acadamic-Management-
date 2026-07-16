@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { api } from '../api';
-import { useApi } from '../components/useApi.js';
+import { useApi, usePagedApi } from '../components/useApi.js';
+import Pager from '../components/Pager.jsx';
+import { searchStudentOptions } from '../components/CrudPage.jsx';
 import Modal from '../components/Modal.jsx';
 import SearchSelect from '../components/SearchSelect.jsx';
 import CustomFields from '../components/CustomFields.jsx';
+import { CATEGORIES } from '../constants.js';
 
-// Reservation categories used for the admitted-seat dropdown.
-const CATEGORIES = ['General', 'OBC', 'SC', 'ST', 'Cat-1', '2A', '2B', '3A', '3B', 'Others'];
 const ENTRY_TYPES = ['Regular', 'Lateral'];
 
-// The batch follows the CSN's year prefix: CSN 2026xxxx -> batch "2026-27".
-const batchYearFromCsn = (csn) => {
-  const year = Math.floor(Number(csn) / 10000);
+// The batch follows the DSN's year prefix: DSN 2026xxxx -> batch "2026-27".
+const batchYearFromDsn = (dsn) => {
+  const year = Math.floor(Number(dsn) / 10000);
   if (!Number.isFinite(year) || year < 2000 || year > 2999) return '';
   return `${year}-${String((year + 1) % 100).padStart(2, '0')}`;
 };
@@ -23,7 +24,7 @@ const hostelStatus = (r) => {
 };
 
 const blank = {
-  adm_id: null, csn: '', course_id: '', kea_ad_no: '', academic_year: '', admission_date: '',
+  adm_id: null, dsn: '', student_label: '', course_id: '', kea_ad_no: '', academic_year: '', admission_date: '',
   admission_mode: '', entry_type: 'Regular', actual_category: '', admitted_category: '',
   loan_provider_name: '', available_loan: '', outside_country: false, outside_state: false,
   hostel_needed: false, hostel_allocated: false, custom_fields: {},
@@ -31,38 +32,36 @@ const blank = {
 
 // 5.3 ADMISSION (FR-S5, FR-F8)
 export default function Admissions() {
-  const { data, loading, error, reload } = useApi('/admissions');
+  const {
+    rows: data, total, page, pageSize, setPage, loading, error, reload,
+  } = usePagedApi('/admissions');
   const { data: courses } = useApi('/courses');
-  const { data: students } = useApi('/students');
   const [form, setForm] = useState(null);
   const [formError, setFormError] = useState(null);
 
   const courseName = (id) => (courses || []).find((c) => c.course_id === id)?.course_name || id;
 
-  // Student picker — searchable by CSN, USN or name.
-  const studentOptions = (students || []).map((s) => ({
-    value: s.csn,
-    label: `CSN ${s.csn} · USN ${s.usn || 'pending'} · ${s.student_name || ''}`,
-  }));
-
-  // When a student is chosen, pull their course and actual category from the
-  // student / personal-details record so admissions staff don't re-enter them.
-  const pickStudent = (csn) => {
-    const s = (students || []).find((x) => String(x.csn) === String(csn));
+  // When a student is chosen from the server-side search, pull their course and
+  // actual category from the picked record so staff don't re-enter them.
+  const pickStudent = (dsn, opt) => {
+    const s = opt?.data;
     setForm((f) => ({
       ...f,
-      csn,
+      dsn,
+      student_label: opt?.label || f.student_label || '',
       course_id: f.course_id || s?.course_id || '',
       actual_category: s?.student_personal_detail?.category || f.actual_category || '',
-      // Derive the batch from the CSN year prefix when not already set.
-      academic_year: f.academic_year || batchYearFromCsn(csn),
+      // Derive the batch from the DSN year prefix when not already set.
+      academic_year: f.academic_year || batchYearFromDsn(dsn),
     }));
   };
 
   const openEdit = (row) => {
     setFormError(null);
     setForm({
-      adm_id: row.adm_id, csn: row.csn, course_id: row.course_id, kea_ad_no: row.kea_ad_no || '',
+      adm_id: row.adm_id, dsn: row.dsn,
+      student_label: row.student ? `DSN ${row.dsn} · USN ${row.student.usn || 'pending'} · ${row.student.student_name || ''}` : `DSN ${row.dsn}`,
+      course_id: row.course_id, kea_ad_no: row.kea_ad_no || '',
       academic_year: row.academic_year || '', admission_date: row.admission_date || '',
       admission_mode: row.admission_mode || '',
       entry_type: row.entry_type || 'Regular', actual_category: row.actual_category || '',
@@ -78,12 +77,13 @@ export default function Admissions() {
     setFormError(null);
     const payload = {
       ...form,
-      csn: Number(form.csn),
+      dsn: Number(form.dsn),
       course_id: Number(form.course_id),
       available_loan: form.available_loan === '' ? null : Number(form.available_loan),
       admission_date: form.admission_date || null,
     };
     delete payload.adm_id;
+    delete payload.student_label; // UI-only field, not an Admission column
     try {
       if (form.adm_id) await api.put(`/admissions/${form.adm_id}`, payload);
       else await api.post('/admissions', payload);
@@ -101,7 +101,7 @@ export default function Admissions() {
   return (
     <div>
       <h2 className="page-title">Admissions</h2>
-      <p className="page-sub">Admission events linking a student (csn) to a course/year (FR-S5)</p>
+      <p className="page-sub">Admission events linking a student (dsn) to a course/year (FR-S5)</p>
 
       <div className="toolbar">
         <button onClick={() => { setFormError(null); setForm({ ...blank }); }}>+ New Admission</button>
@@ -113,15 +113,15 @@ export default function Admissions() {
           <table>
             <thead>
               <tr>
-                <th>Sl. No</th><th>CSN</th><th>Student</th><th>Course</th><th>Year</th>
+                <th>Sl. No</th><th>DSN</th><th>Student</th><th>Course</th><th>Year</th>
                 <th>Mode</th><th>Entry</th><th>Category</th><th>Loan</th><th>Hostel</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {data?.map((r, i) => (
                 <tr key={r.adm_id}>
-                  <td>{i + 1}</td>
-                  <td>{r.csn}</td>
+                  <td>{(page - 1) * pageSize + i + 1}</td>
+                  <td>{r.dsn}</td>
                   <td>{r.student?.student_name}</td>
                   <td>{r.course?.course_name || courseName(r.course_id)}</td>
                   <td>{r.academic_year}</td>
@@ -141,15 +141,17 @@ export default function Admissions() {
           </table>
         )}
       </div>
+      <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} />
 
       {form && (
         <Modal title={form.adm_id ? `Edit Admission (${form.adm_id})` : 'New Admissions'} onClose={() => setForm(null)}>
           <form onSubmit={save}>
             <div className="form-grid">
               <div className="field">
-                <label>Student (CSN) *</label>
-                <SearchSelect required options={studentOptions} value={form.csn}
-                  onChange={pickStudent} placeholder="Search by CSN, USN or name…" />
+                <label>Student (DSN) *</label>
+                <SearchSelect required asyncSearch={searchStudentOptions} value={form.dsn}
+                  valueLabel={form.student_label}
+                  onChange={pickStudent} placeholder="Search by DSN, USN or name…" />
               </div>
               <div className="field">
                 <label>Course *</label>
@@ -161,8 +163,8 @@ export default function Admissions() {
               <div className="field"><label>KEA Admission No</label>
                 <input value={form.kea_ad_no} onChange={(e) => setForm({ ...form, kea_ad_no: e.target.value })} /></div>
 
-              <div className="field"><label>Batch / Academic Year (auto from CSN)</label>
-                <input value={form.academic_year} placeholder="auto-filled from CSN, e.g. 2026-27"
+              <div className="field"><label>Batch / Academic Year (auto from DSN)</label>
+                <input value={form.academic_year} placeholder="auto-filled from DSN, e.g. 2026-27"
                   onChange={(e) => setForm({ ...form, academic_year: e.target.value })} /></div>
               <div className="field"><label>Date of Admission</label>
                 <input type="date" value={form.admission_date}

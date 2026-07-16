@@ -1,15 +1,33 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import Pager from '../components/Pager.jsx';
 import Modal from '../components/Modal.jsx';
 import CustomFields from '../components/CustomFields.jsx';
 import { digitsOnly, normalizeMobile } from '../utils/digits.js';
+import { CATEGORIES } from '../constants.js';
 
 // Dropdown choices for constrained personal-detail fields
 const PERSONAL_OPTIONS = {
   gender: ['Male', 'Female', 'Other'],
   religion: ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Jain', 'Buddhist', 'Other'],
+  category: CATEGORIES,
   blood_group: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
 };
+
+// Dropdowns whose catch-all choice opens a text box to name the real value. The
+// typed value is stored in the column as-is ("Nomadic Tribe", not "Others"), so
+// a value that isn't one of the listed options — from an Excel import, say —
+// reopens as this catch-all with the text box already filled, rather than
+// rendering blank and being wiped on the next save.
+const OTHER_SPECIFY = { category: 'Others', religion: 'Other' };
+
+const needsSpecify = (key, value) => Boolean(
+  OTHER_SPECIFY[key] && value && !PERSONAL_OPTIONS[key].includes(value)
+);
+
+const deriveSpecifyMode = (personal = {}) => Object.fromEntries(
+  Object.keys(OTHER_SPECIFY).map((key) => [key, needsSpecify(key, personal[key])])
+);
 
 // Year of study — stored in the `semester` column as the representative semester
 // (year × 2 − 1), so certificates/reports that derive year from semester stay correct.
@@ -64,8 +82,16 @@ const validationProps = (key) => {
   return {};
 };
 
+// Admission-year choices for the DSN prefix: this calendar year plus the two
+// prior and one ahead, newest first. The DSN's year prefix is what scopes a
+// student to a dashboard batch, so a Jan–Jun late/lateral admission for the
+// running batch can pick the correct year instead of the calendar default.
+const CURRENT_YEAR = new Date().getFullYear();
+const ADMISSION_YEARS = [CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
+
 const emptyForm = {
   first_name: '', last_name: '', course_id: '', usn: '', year: '',
+  dsn_year: CURRENT_YEAR,
   custom_fields: {},
   personal: {
     father_name: '', mother_name: '', gender: '', religion: '', category: '', caste: '',
@@ -75,35 +101,60 @@ const emptyForm = {
 };
 
 export default function Students() {
+  const PAGE_SIZE = 50;
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
   const [q, setQ] = useState('');
+  const [submittedQ, setSubmittedQ] = useState(''); // the query actually applied
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // form object or null
+  // Which OTHER_SPECIFY dropdowns are currently showing their text box. Kept
+  // outside `editing` because it is UI state, not part of the saved record.
+  const [specifyMode, setSpecifyMode] = useState({});
   const [usnModal, setUsnModal] = useState(null);
 
+  // With a search term we hit /students/search (capped list, no paging); without
+  // one we hit the paginated /students so the full roster never loads at once.
   const load = () => {
-    const path = q.trim() ? `/students/search?q=${encodeURIComponent(q.trim())}` : '/students';
-    api.get(path).then(setStudents).catch((e) => setError(e.message));
+    setError(null);
+    if (submittedQ) {
+      api.get(`/students/search?q=${encodeURIComponent(submittedQ)}`)
+        .then((d) => { setStudents(d); setTotal(d.length); })
+        .catch((e) => setError(e.message));
+    } else {
+      api.get(`/students?page=${page}&pageSize=${PAGE_SIZE}`)
+        .then((d) => { setStudents(d.rows || []); setTotal(d.total || 0); })
+        .catch((e) => setError(e.message));
+    }
   };
 
+  const doSearch = () => { setSubmittedQ(q.trim()); setPage(1); };
+  const clearSearch = () => { setQ(''); setSubmittedQ(''); setPage(1); };
+
   useEffect(() => { api.get('/courses').then(setCourses).catch(() => {}); }, []);
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [submittedQ, page]);
 
   const courseName = (id) => courses.find((c) => c.course_id === id)?.course_name || id;
 
-  const openNew = () => setEditing(JSON.parse(JSON.stringify(emptyForm)));
-  const openEdit = async (csn) => {
-    const s = await api.get(`/students/${csn}`);
+  const openNew = () => {
+    setSpecifyMode({});
+    setEditing(JSON.parse(JSON.stringify(emptyForm)));
+  };
+  const openEdit = async (dsn) => {
+    const s = await api.get(`/students/${dsn}`);
     const parts = (s.student_name || '').trim().split(/\s+/);
+    const personal = s.student_personal_detail || { ...emptyForm.personal };
+    setSpecifyMode(deriveSpecifyMode(personal));
     setEditing({
-      csn: s.csn,
+      dsn: s.dsn,
       first_name: parts.shift() || '',
       last_name: parts.join(' '),
       course_id: s.course_id,
       usn: s.usn || '', year: semesterToYear(s.semester),
       custom_fields: s.custom_fields || {},
-      personal: s.student_personal_detail || { ...emptyForm.personal },
+      personal,
     });
   };
 
@@ -112,7 +163,7 @@ export default function Students() {
     setError(null);
     try {
       const payload = {
-        csn: editing.csn,
+        dsn: editing.dsn,
         student_name: `${editing.first_name || ''} ${editing.last_name || ''}`.trim(),
         course_id: Number(editing.course_id),
         usn: editing.usn,
@@ -120,8 +171,12 @@ export default function Students() {
         custom_fields: editing.custom_fields,
         personal: editing.personal,
       };
-      if (editing.csn) await api.put(`/students/${editing.csn}`, payload);
-      else await api.post('/students', payload);
+      if (editing.dsn) {
+        await api.put(`/students/${editing.dsn}`, payload);
+      } else {
+        // dsn_year only matters at creation — it sets the immutable DSN prefix.
+        await api.post('/students', { ...payload, dsn_year: Number(editing.dsn_year) || CURRENT_YEAR });
+      }
       setEditing(null);
       load();
     } catch (err) { setError(err.message); }
@@ -130,15 +185,15 @@ export default function Students() {
   const saveUsn = async (e) => {
     e.preventDefault();
     try {
-      await api.patch(`/students/${usnModal.csn}/usn`, { usn: usnModal.usn });
+      await api.patch(`/students/${usnModal.dsn}/usn`, { usn: usnModal.usn });
       setUsnModal(null);
       load();
     } catch (err) { setError(err.message); }
   };
 
-  const remove = async (csn) => {
-    if (!confirm(`Delete student CSN ${csn}? This removes their personal/admission/fee records.`)) return;
-    await api.del(`/students/${csn}`);
+  const remove = async (dsn) => {
+    if (!confirm(`Delete student DSN ${dsn}? This removes their personal/admission/fee records.`)) return;
+    await api.del(`/students/${dsn}`);
     load();
   };
 
@@ -149,12 +204,12 @@ export default function Students() {
 
       <div className="toolbar">
         <div className="field" style={{ flex: 1 }}>
-          <label>Quick search (USN, name, mobile, CSN)</label>
+          <label>Quick search (USN, name, mobile, DSN)</label>
           <input value={q} onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && load()} placeholder="Type and press Enter…" />
+            onKeyDown={(e) => e.key === 'Enter' && doSearch()} placeholder="Type and press Enter…" />
         </div>
-        <button onClick={load}>Search</button>
-        <button className="secondary" onClick={() => { setQ(''); api.get('/students').then(setStudents); }}>Clear</button>
+        <button onClick={doSearch}>Search</button>
+        <button className="secondary" onClick={clearSearch}>Clear</button>
         <button onClick={openNew}>+ New Student</button>
       </div>
 
@@ -164,22 +219,22 @@ export default function Students() {
         <table>
           <thead>
             <tr>
-              <th>CSN</th><th>USN</th><th>Name</th><th>Course</th><th>Year</th><th>Mobile</th><th>Actions</th>
+              <th>DSN</th><th>USN</th><th>Name</th><th>Course</th><th>Year</th><th>Mobile</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {students.map((s) => (
-              <tr key={s.csn}>
-                <td>{s.csn}</td>
+              <tr key={s.dsn}>
+                <td>{s.dsn}</td>
                 <td>{s.usn || <span className="pill-pending">pending</span>}</td>
                 <td>{s.student_name}</td>
                 <td>{courseName(s.course_id)}</td>
                 <td>{s.semester ? `${ordinal(semesterToYear(s.semester))} Year` : '-'}</td>
                 <td>{s.student_personal_detail?.student_mobile || '-'}</td>
                 <td className="row-actions">
-                  <button className="link" onClick={() => openEdit(s.csn)}>Edit</button>
-                  {!s.usn && <button className="link" onClick={() => setUsnModal({ csn: s.csn, usn: '' })}>Set USN</button>}
-                  <button className="link" onClick={() => remove(s.csn)}>Delete</button>
+                  <button className="link" onClick={() => openEdit(s.dsn)}>Edit</button>
+                  {!s.usn && <button className="link" onClick={() => setUsnModal({ dsn: s.dsn, usn: '' })}>Set USN</button>}
+                  <button className="link" onClick={() => remove(s.dsn)}>Delete</button>
                 </td>
               </tr>
             ))}
@@ -187,9 +242,10 @@ export default function Students() {
           </tbody>
         </table>
       </div>
+      {!submittedQ && <Pager page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage} />}
 
       {editing && (
-        <Modal title={editing.csn ? `Edit Student (CSN ${editing.csn})` : 'New Student'} onClose={() => setEditing(null)}>
+        <Modal title={editing.dsn ? `Edit Student (DSN ${editing.dsn})` : 'New Student'} onClose={() => setEditing(null)}>
           <form onSubmit={save}>
             <h4>Academic</h4>
             <div className="form-grid">
@@ -217,6 +273,15 @@ export default function Students() {
               <Field label="USN (blank if not yet allotted)">
                 <input value={editing.usn} onChange={(e) => setEditing({ ...editing, usn: e.target.value })} />
               </Field>
+              {/* DSN prefix is fixed once created, so only offer the year for new students. */}
+              {!editing.dsn && (
+                <Field label="Admission Year *">
+                  <select required value={editing.dsn_year}
+                    onChange={(e) => setEditing({ ...editing, dsn_year: e.target.value })}>
+                    {ADMISSION_YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </Field>
+              )}
               <Field label="Year *">
                 <select required value={editing.year}
                   onChange={(e) => setEditing({ ...editing, year: e.target.value })}>
@@ -233,11 +298,34 @@ export default function Students() {
               {PERSONAL_FIELDS.map(([key, label, type, required]) => (
                 <Field key={key} label={`${label}${required ? ' *' : ''}`}>
                   {PERSONAL_OPTIONS[key] ? (
-                    <select required={required} value={editing.personal[key] || ''}
-                      onChange={(e) => setEditing({ ...editing, personal: { ...editing.personal, [key]: e.target.value } })}>
-                      <option value="">— select —</option>
-                      {PERSONAL_OPTIONS[key].map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
+                    <>
+                      <select required={required}
+                        // In specify mode the column holds the typed value, which is
+                        // not an option — pin the dropdown to its catch-all choice.
+                        value={specifyMode[key] ? OTHER_SPECIFY[key] : (editing.personal[key] || '')}
+                        onChange={(e) => {
+                          const picked = e.target.value;
+                          const isCatchAll = picked === OTHER_SPECIFY[key];
+                          setSpecifyMode({ ...specifyMode, [key]: isCatchAll });
+                          setEditing({
+                            ...editing,
+                            // Clear the value so the text box starts empty and `required`
+                            // forces the user to actually name the category.
+                            personal: { ...editing.personal, [key]: isCatchAll ? '' : picked },
+                          });
+                        }}>
+                        <option value="">— select —</option>
+                        {PERSONAL_OPTIONS[key].map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                      {specifyMode[key] && (
+                        <input required placeholder={`Specify ${label.toLowerCase()}`}
+                          style={{ marginTop: 6 }} value={editing.personal[key] || ''}
+                          onChange={(e) => setEditing({
+                            ...editing,
+                            personal: { ...editing.personal, [key]: e.target.value },
+                          })} />
+                      )}
+                    </>
                   ) : (
                     <input type={type || 'text'} required={required} {...validationProps(key)}
                       value={editing.personal[key] || ''}
@@ -273,7 +361,7 @@ export default function Students() {
       )}
 
       {usnModal && (
-        <Modal title={`Allot USN — CSN ${usnModal.csn}`} onClose={() => setUsnModal(null)}>
+        <Modal title={`Allot USN — DSN ${usnModal.dsn}`} onClose={() => setUsnModal(null)}>
           <form onSubmit={saveUsn}>
             <Field label="University Seat Number (USN)">
               <input required value={usnModal.usn} autoFocus

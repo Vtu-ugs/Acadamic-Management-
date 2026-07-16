@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
+const { customFieldsAttribute } = require('../utils/customFields');
 
 // 5.5 CERTIFICATE
 const Certificate = sequelize.define('certificate', {
@@ -13,6 +14,7 @@ const Certificate = sequelize.define('certificate', {
   // Serial No. and the admission/leaving dates). Stored as a JSON string;
   // rows a–g are always auto-fetched from the student record at render time.
   tc_details: { type: DataTypes.TEXT },
+  custom_fields: customFieldsAttribute(),
 });
 
 module.exports = Certificate;

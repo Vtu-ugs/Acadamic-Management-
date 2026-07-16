@@ -38,6 +38,10 @@ async function create(req, res) {
     delete body.approval_status;                 // approval is not self-service
     delete body.approval_date;
     delete body.approved_by;
+  } else if (!body.staff_id) {
+    // Admin must say whose diary this is (staff_id is NOT NULL) — return a clean
+    // 400 rather than letting the FK constraint surface as a 500.
+    return res.status(400).json({ error: 'staff_id is required' });
   }
   const row = await WeeklyDiary.create(body);
   await logActivity(req.user, 'diary_create', `Diary #${row.diary_id} (week ${row.week_start_date || '?'})`);

@@ -2,24 +2,32 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useApi } from './useApi.js';
 import Modal from './Modal.jsx';
+import CustomFields from './CustomFields.jsx';
 
 /**
  * Generic list + create/edit/delete page.
  * props:
  *  title, subtitle, path (API base), pk (primary key name)
  *  columns: [{ key, label, render? }]
- *  fields:  [{ key, label, type?, required?, options?: [{value,label}] }]
+ *  fields:  [{ key, label, type?, required?, options?: [{value,label}], sanitize? }]
  *  filters: optional [{ key, label, allLabel? }] — renders a dropdown of the
  *           distinct values found in `data[key]` and filters the table by it.
+ *  customFieldsEntity: optional entity name ('staff', 'course', …) — appends the
+ *           admin-defined fields for that entity to the form.
  */
-export default function CrudPage({ title, subtitle, path, pk, columns, fields, filters = [] }) {
+export default function CrudPage({
+  title, subtitle, path, pk, columns, fields, filters = [], customFieldsEntity,
+}) {
   const { data, loading, error, reload } = useApi(path);
   const [editing, setEditing] = useState(null);
   const [formError, setFormError] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [filterValues, setFilterValues] = useState({});
 
-  const blank = () => Object.fromEntries(fields.map((f) => [f.key, '']));
+  const blank = () => ({
+    ...Object.fromEntries(fields.map((f) => [f.key, ''])),
+    ...(customFieldsEntity && { custom_fields: {} }),
+  });
 
   // Distinct, sorted options per filter, derived from the loaded rows.
   const filterOptions = (key) =>
@@ -133,6 +141,10 @@ export default function CrudPage({ title, subtitle, path, pk, columns, fields, f
                   )}
                 </div>
               ))}
+              {customFieldsEntity && (
+                <CustomFields entity={customFieldsEntity} values={editing.custom_fields}
+                  onChange={(cf) => setEditing({ ...editing, custom_fields: cf })} />
+              )}
             </div>
             {formError && <div className="error">{formError}</div>}
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
@@ -146,22 +158,36 @@ export default function CrudPage({ title, subtitle, path, pk, columns, fields, f
   );
 }
 
-// Shared hook for loading select options (courses, staff, students, admissions)
+// Shared hook for loading small lookup select options (courses, staff).
+// Student/admission pickers are NOT loaded here — those tables can be large, so
+// callers use SearchSelect's server-side `asyncSearch` against the /search
+// endpoints instead of pulling every row.
 export function useOptions() {
   const courses = useApi('/courses');
   const staff = useApi('/staff');
-  const students = useApi('/students');
-  const admissions = useApi('/admissions');
   return {
     courseOptions: (courses.data || []).map((c) => ({ value: c.course_id, label: c.course_name })),
     staffOptions: (staff.data || []).map((s) => ({ value: s.staff_id, label: s.staff_name })),
-    studentOptions: (students.data || []).map((s) => ({
-      value: s.csn,
-      label: `${s.csn} — ${s.student_name}${s.usn ? ` (${s.usn})` : ' (USN pending)'}`,
-    })),
-    admissionOptions: (admissions.data || []).map((a) => ({
-      value: a.adm_id,
-      label: `CSN ${a.csn} · USN ${a.student?.usn || 'pending'} — ${a.student?.student_name || ''}`,
-    })),
   };
+}
+
+// Server-side option loaders for the large pickers, shaped for SearchSelect's
+// `asyncSearch`. Each returns [{ value, label, data }] with the raw row in
+// `data` so callers can read fields off the picked record.
+export async function searchStudentOptions(q) {
+  const rows = await api.get(`/students/search?q=${encodeURIComponent(q || '')}`);
+  return rows.map((s) => ({
+    value: s.dsn,
+    label: `DSN ${s.dsn} · USN ${s.usn || 'pending'} · ${s.student_name || ''}${s.course?.course_name ? ` — ${s.course.course_name}` : ''}`,
+    data: s,
+  }));
+}
+
+export async function searchAdmissionOptions(q) {
+  const rows = await api.get(`/admissions/search${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  return rows.map((a) => ({
+    value: a.adm_id,
+    label: `DSN ${a.dsn} · USN ${a.student?.usn || 'pending'} · ${a.student?.student_name || ''} — ${a.entry_type || 'Regular'} (${a.academic_year || 'batch ?'})`,
+    data: a,
+  }));
 }

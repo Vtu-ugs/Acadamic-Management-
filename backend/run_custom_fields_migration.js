@@ -5,7 +5,9 @@
 require('dotenv').config();
 const sequelize = require('./src/config/database');
 
-const ENTITY_TABLES = ['student', 'admission', 'fee'];
+// Tables that carry a `custom_fields` JSON column. `course` is the plural
+// `courses` table — keep this in step with ENTITY_TABLES in customFieldController.
+const ENTITY_TABLES = ['student', 'admission', 'fee', 'certificate', 'staff', 'courses'];
 
 const CREATE_DEFINITION_TABLE = `
   CREATE TABLE IF NOT EXISTS custom_field (

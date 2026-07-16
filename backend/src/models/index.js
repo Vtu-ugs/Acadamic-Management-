@@ -22,12 +22,12 @@ Course.hasMany(Student, { foreignKey: 'course_id' });
 Student.belongsTo(Course, { foreignKey: 'course_id' });
 
 // STUDENT ── STUDENT_PERSONAL_DETAILS (1:1)
-Student.hasOne(StudentPersonalDetails, { foreignKey: 'csn', onDelete: 'CASCADE' });
-StudentPersonalDetails.belongsTo(Student, { foreignKey: 'csn' });
+Student.hasOne(StudentPersonalDetails, { foreignKey: 'dsn', onDelete: 'CASCADE' });
+StudentPersonalDetails.belongsTo(Student, { foreignKey: 'dsn' });
 
-// STUDENT ──< ADMISSION   (FR-assumption: keyed off csn, not usn)
-Student.hasMany(Admission, { foreignKey: 'csn', onDelete: 'CASCADE' });
-Admission.belongsTo(Student, { foreignKey: 'csn' });
+// STUDENT ──< ADMISSION   (FR-assumption: keyed off dsn, not usn)
+Student.hasMany(Admission, { foreignKey: 'dsn', onDelete: 'CASCADE' });
+Admission.belongsTo(Student, { foreignKey: 'dsn' });
 Course.hasMany(Admission, { foreignKey: 'course_id' });
 Admission.belongsTo(Course, { foreignKey: 'course_id' });
 
@@ -64,6 +64,10 @@ Staff.hasOne(AppUser, { foreignKey: 'staff_id' });
 attachCustomFields(Student, 'student');
 attachCustomFields(Admission, 'admission');
 attachCustomFields(Fee, 'fee');
+attachCustomFields(Certificate, 'certificate');
+attachCustomFields(Staff, 'staff');
+// Entity key is singular `course`; the table it maps to is `courses`.
+attachCustomFields(Course, 'course');
 
 module.exports = {
   sequelize,

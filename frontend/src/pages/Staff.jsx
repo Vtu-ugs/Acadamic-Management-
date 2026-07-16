@@ -6,6 +6,7 @@ export default function Staff() {
   const { courseOptions } = useOptions();
   return (
     <CrudPage
+      customFieldsEntity="staff"
       title="Staff"
       subtitle="Faculty/staff master — used as issued_by / approved_by reference (FR-X1)"
       path="/staff"

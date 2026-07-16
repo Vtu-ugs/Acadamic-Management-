@@ -1,29 +1,29 @@
 import { useState } from 'react';
 import { api, fileUrl } from '../api';
-import { useApi } from '../components/useApi.js';
+import { searchStudentOptions } from '../components/CrudPage.jsx';
 import SearchSelect from '../components/SearchSelect.jsx';
 
 const inr = (v) => (v == null || v === '' ? '—' : `₹${Number(v).toLocaleString('en-IN')}`);
 
+// What the course costs across every year. Carry-forward is an internal transfer
+// between years, so it must not be added on top.
+const courseTotal = (adm) => adm.years.reduce((sum, y) => sum + y.expected_fee, 0);
+
 export default function StudentFeeLedger() {
-  const { data: students } = useApi('/students');
-  const [csn, setCsn] = useState('');
+  const [dsn, setDsn] = useState('');
+  const [studentLabel, setStudentLabel] = useState('');
   const [ledger, setLedger] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const studentOptions = (students || []).map((s) => ({
-    value: s.csn,
-    label: `CSN ${s.csn} · USN ${s.usn || 'pending'} · ${s.student_name} — ${s.course?.course_name || ''}`,
-  }));
-
-  const loadLedger = async (selectedCsn) => {
-    setCsn(selectedCsn);
-    if (!selectedCsn) { setLedger(null); return; }
+  const loadLedger = async (selectedDsn, opt) => {
+    setDsn(selectedDsn);
+    setStudentLabel(opt?.label || '');
+    if (!selectedDsn) { setLedger(null); return; }
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get(`/fees/ledger/${selectedCsn}`);
+      const data = await api.get(`/fees/ledger/${selectedDsn}`);
       setLedger(data);
     } catch (err) {
       setError(err.message);
@@ -41,9 +41,9 @@ export default function StudentFeeLedger() {
       <div className="toolbar">
         <div className="field" style={{ minWidth: 400 }}>
           <label>Select Student</label>
-          <SearchSelect options={studentOptions} value={csn}
+          <SearchSelect asyncSearch={searchStudentOptions} value={dsn} valueLabel={studentLabel}
             onChange={loadLedger}
-            placeholder="Search by CSN, USN or name…" />
+            placeholder="Search by DSN, USN or name…" />
         </div>
       </div>
 
@@ -54,7 +54,7 @@ export default function StudentFeeLedger() {
         <div key={adm.adm_id} className="card" style={{ marginBottom: 20 }}>
           <div style={{ marginBottom: 12 }}>
             <h3 style={{ margin: 0 }}>
-              {adm.student_name} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· CSN {adm.csn} · USN {adm.usn || 'pending'}</span>
+              {adm.student_name} <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· DSN {adm.dsn} · USN {adm.usn || 'pending'}</span>
             </h3>
             <div className="muted" style={{ marginTop: 4 }}>
               {adm.course_name} · {adm.program} · {adm.entry_type} · Batch {adm.batch_year}
@@ -95,10 +95,14 @@ export default function StudentFeeLedger() {
             <tfoot>
               <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border)' }}>
                 <td colSpan="2">Grand Total</td>
-                <td>{inr(adm.years.reduce((s, y) => s + y.expected_fee, 0))}</td>
+                <td>{inr(courseTotal(adm))}</td>
                 <td>—</td>
-                <td>{inr(adm.years.reduce((s, y) => s + y.total_due, 0))}</td>
+                {/* Each year's total_due already carries the previous year's pending
+                    forward, so summing the column would count it again. Over the whole
+                    course the amount owed is simply what the course costs. */}
+                <td>{inr(courseTotal(adm))}</td>
                 <td>{inr(adm.years.reduce((s, y) => s + y.total_paid, 0))}</td>
+                {/* The last year's pending is already cumulative. */}
                 <td style={{ color: '#e74c3c' }}>
                   {inr(adm.years[adm.years.length - 1]?.pending || 0)}
                 </td>

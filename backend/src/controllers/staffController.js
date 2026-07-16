@@ -4,7 +4,7 @@ const { validatePassword } = require('../utils/passwordPolicy');
 const { passwordInUse } = require('./userController');
 
 // Staff fields that belong to the staff record itself (not the login).
-const STAFF_FIELDS = ['course_id', 'staff_name', 'designation', 'email', 'mobile'];
+const STAFF_FIELDS = ['course_id', 'staff_name', 'designation', 'email', 'mobile', 'custom_fields'];
 const pickStaff = (body) => {
   const out = {};
   for (const k of STAFF_FIELDS) if (body[k] !== undefined) out[k] = body[k] === '' ? null : body[k];

@@ -8,6 +8,9 @@ const ENTITIES = [
   { value: 'admission', label: 'Admissions' },
   { value: 'student', label: 'Students' },
   { value: 'fee', label: 'Fees' },
+  { value: 'certificate', label: 'Certificates' },
+  { value: 'staff', label: 'Staff' },
+  { value: 'course', label: 'Courses' },
 ];
 const FIELD_TYPES = ['text', 'number', 'date', 'checkbox', 'select'];
 const ENTITY_LABEL = Object.fromEntries(ENTITIES.map((e) => [e.value, e.label]));
@@ -77,8 +80,9 @@ export default function CustomFieldsAdmin() {
     <div>
       <h2 className="page-title">Custom Fields</h2>
       <p className="page-sub">
-        Add your own fields to the Admissions, Students and Fees forms without a schema change.
-        Hiding a field removes it from the forms but keeps everything already saved in it.
+        Add your own fields to the Admissions, Students, Fees, Certificates, Staff and Courses
+        forms without a schema change. Hiding a field removes it from the forms but keeps
+        everything already saved in it; deleting also erases the saved values.
       </p>
 
       <div className="toolbar">

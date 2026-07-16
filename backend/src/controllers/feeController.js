@@ -3,6 +3,8 @@ const { fn, col, literal, QueryTypes, Op } = require('sequelize');
 const {
   sequelize, Fee, Admission, Student, Course, FeeStructure,
 } = require('../models');
+const { isPaged, parsePagination } = require('../utils/paginate');
+const { logActivity } = require('../utils/activityLog');
 
 // ---------------------------------------------------------------------------
 // Helper: which program a course belongs to (drives the fee-structure lookup).
@@ -64,6 +66,42 @@ async function computeCarryForward(admId, programYear, preloaded) {
   return Math.max(expected - paid, 0);
 }
 
+// Money actually received on a single receipt.
+const paidOf = (f) => (Number(f.kea_fee) || 0) + (Number(f.regn_fee) || 0) + (Number(f.tuition_fee) || 0);
+
+// ---------------------------------------------------------------------------
+// Consolidate all receipts of one (adm_id, program_year) so the stored
+// pending_due never double-counts across installments. A year can be paid in
+// several receipts; the true remaining is `slab − everything paid this year`,
+// which we park on the LATEST receipt and zero on the earlier ones. Then any
+// SUM(pending_due) over fee rows equals the real outstanding.
+//
+// The net is per year (no carry): an unpaid prior year stays represented by its
+// own year's row, so summing per-year nets never counts a shortfall twice.
+// ---------------------------------------------------------------------------
+async function consolidateYearBalance(admId, programYear, slabTotal, transaction) {
+  if (programYear == null) return; // receipts with no year: nothing to net
+  const rows = await Fee.findAll({
+    where: { adm_id: admId, program_year: programYear },
+    order: [['fee_id', 'ASC']],
+    transaction,
+  });
+  if (!rows.length) return;
+
+  const sumPaid = rows.reduce((s, f) => s + paidOf(f), 0);
+  const net = Math.max((Number(slabTotal) || 0) - sumPaid, 0);
+  const lastId = rows[rows.length - 1].fee_id;
+
+  for (const f of rows) {
+    const isLast = f.fee_id === lastId;
+    const pending = isLast ? net : 0;
+    const status = isLast
+      ? (net <= 0 ? 'Paid' : (sumPaid > 0 ? 'Partial' : 'Pending'))
+      : 'Paid';
+    await f.update({ pending_due: pending, payment_status: status }, { transaction });
+  }
+}
+
 // FR-F1/F3: record a fee. The server is the source of truth for the money:
 // the year is BILLED at the official slab total, carry-forward and pending are
 // always recomputed here — client-supplied totals/carry/pending are ignored so
@@ -73,6 +111,14 @@ exports.create = async (req, res) => {
 
   // Persist program_year
   data.program_year = data.program_year != null ? (Number(data.program_year) || null) : null;
+
+  // Reject negative payment amounts — the form guards min=0, but a raw API call
+  // or import must not be able to store a negative that corrupts the balance.
+  for (const k of ['kea_fee', 'regn_fee', 'tuition_fee']) {
+    if (data[k] != null && data[k] !== '' && Number(data[k]) < 0) {
+      return res.status(400).json({ error: `${k} cannot be negative` });
+    }
+  }
 
   const { slabs, adm } = await getAdmissionSlabs(data.adm_id);
   const slab = slabs.find((s) => s.program_year === data.program_year);
@@ -96,10 +142,45 @@ exports.create = async (req, res) => {
   data.payment_status = data.pending_due <= 0 ? 'Paid' : (paid > 0 ? 'Partial' : 'Pending');
 
   if (!data.academic_year && adm?.academic_year) data.academic_year = adm.academic_year;
-  if (!data.receipt_number) data.receipt_number = `RC-${Date.now()}`;
+  // Random suffix so two receipts saved in the same millisecond don't collide on
+  // the UNIQUE receipt_number (mirrors the import path).
+  if (!data.receipt_number) data.receipt_number = `RC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-  const fee = await Fee.create(data);
-  res.status(201).json(fee);
+  // Insert the receipt, then re-net the whole year so pending_due stays
+  // non-double-counting across installments (see consolidateYearBalance).
+  const fee = await sequelize.transaction(async (t) => {
+    const created = await Fee.create(data, { transaction: t });
+    await consolidateYearBalance(data.adm_id, data.program_year, billed, t);
+    return created;
+  });
+
+  // Return the row with its consolidated pending_due / payment_status.
+  const fresh = await Fee.findByPk(fee.fee_id);
+  res.status(201).json(fresh);
+};
+
+// Void a receipt (FR-F correction). Removes the fee row and re-nets the rest of
+// that (adm_id, program_year) so the year's balance stays correct. Deleting the
+// only receipt of a year simply leaves it fully pending again. Audited.
+exports.remove = async (req, res) => {
+  const fee = await Fee.findByPk(req.params.id);
+  if (!fee) return res.status(404).json({ error: 'Fee record not found' });
+
+  const { adm_id: admId, program_year: programYear, receipt_number: receiptNo } = fee;
+
+  // Bill at the official slab (same source of truth as create) so the surviving
+  // receipts re-net against the right total.
+  const { slabs } = await getAdmissionSlabs(admId);
+  const slab = slabs.find((s) => s.program_year === programYear);
+  const slabTotal = slab ? (Number(slab.total_fee) || 0) : (Number(fee.total_course_fee) || 0);
+
+  await sequelize.transaction(async (t) => {
+    await fee.destroy({ transaction: t });
+    await consolidateYearBalance(admId, programYear, slabTotal, t);
+  });
+
+  await logActivity(req.user, 'fee_void', `Fee #${req.params.id} (${receiptNo || 'no receipt no.'})`);
+  res.status(204).end();
 };
 
 exports.list = async (req, res) => {
@@ -107,11 +188,34 @@ exports.list = async (req, res) => {
   if (req.query.payment_status) where.payment_status = req.query.payment_status;
   if (req.query.academic_year) where.academic_year = req.query.academic_year;
 
-  const fees = await Fee.findAll({
-    where,
-    include: [{ model: Admission, include: [{ model: Student }, { model: Course }] }],
-    order: [['fee_id', 'DESC']],
-  });
+  // Optional student search — match the receipt's student by name, USN or DSN.
+  const q = (req.query.q || '').trim();
+  const studentInclude = { model: Student };
+  const admissionInclude = { model: Admission, include: [studentInclude, { model: Course }] };
+  if (q) {
+    // Inner-join so the filter actually narrows the fee rows.
+    studentInclude.required = true;
+    admissionInclude.required = true;
+    studentInclude.where = {
+      [Op.or]: [
+        { student_name: { [Op.like]: `%${q}%` } },
+        { usn: { [Op.like]: `%${q}%` } },
+        ...(Number.isInteger(Number(q)) ? [{ dsn: Number(q) }] : []),
+      ],
+    };
+  }
+  const include = [admissionInclude];
+
+  // Opt-in pagination (see utils/paginate); plain array otherwise.
+  if (isPaged(req.query)) {
+    const { page, pageSize, limit, offset } = parsePagination(req.query);
+    const { rows, count } = await Fee.findAndCountAll({
+      where, include, order: [['fee_id', 'DESC']], limit, offset, distinct: true,
+    });
+    return res.json({ rows, total: count, page, pageSize });
+  }
+
+  const fees = await Fee.findAll({ where, include, order: [['fee_id', 'DESC']] });
   res.json(fees);
 };
 
@@ -120,7 +224,7 @@ exports.byStudent = async (req, res) => {
   const fees = await Fee.findAll({
     include: [{
       model: Admission,
-      where: { csn: req.params.csn },
+      where: { dsn: req.params.dsn },
       include: [{ model: Student }, { model: Course }],
     }],
     order: [['receipt_date', 'ASC']],
@@ -129,19 +233,22 @@ exports.byStudent = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// NEW: Year-wise fee ledger for a student (GET /fees/ledger/:csn)
+// NEW: Year-wise fee ledger for a student (GET /fees/ledger/:dsn)
 // Returns one row per program year with expected fee, carry-forward, paid, pending.
 // ---------------------------------------------------------------------------
 exports.ledger = async (req, res) => {
-  const csn = req.params.csn;
+  const dsn = req.params.dsn;
 
   // Find admission(s) for this student
   const admissions = await Admission.findAll({
-    where: { csn },
+    where: { dsn },
     include: [{ model: Student }, { model: Course }],
   });
 
-  if (!admissions.length) return res.status(404).json({ error: 'No admission found for this student' });
+  // A student with no admission yet has an empty ledger, not a missing one —
+  // the page renders its own "no admission" notice from this. A 404 here would
+  // surface as an error banner instead.
+  if (!admissions.length) return res.json([]);
 
   const results = [];
 
@@ -222,7 +329,7 @@ exports.ledger = async (req, res) => {
 
     results.push({
       adm_id: adm.adm_id,
-      csn: adm.csn,
+      dsn: adm.dsn,
       student_name: adm.student?.student_name,
       usn: adm.student?.usn,
       course_name: adm.course?.course_name,
@@ -250,26 +357,38 @@ exports.pendingDues = async (req, res) => {
   if (req.query.course_id) admWhere.course_id = req.query.course_id;
   if (req.query.academic_year) admWhere.academic_year = req.query.academic_year;
 
-  const fees = await Fee.findAll({
-    where: { pending_due: { [Op.gt]: 0 } },
-    include: [{
-      model: Admission,
-      where: Object.keys(admWhere).length ? admWhere : undefined,
-      include: [{ model: Student }, { model: Course }],
-    }],
-    order: [['pending_due', 'DESC']],
-  });
+  const where = { pending_due: { [Op.gt]: 0 } };
+  const include = [{
+    model: Admission,
+    where: Object.keys(admWhere).length ? admWhere : undefined,
+    include: [{ model: Student }, { model: Course }],
+  }];
+
+  // Opt-in pagination (see utils/paginate); plain array otherwise.
+  if (isPaged(req.query)) {
+    const { page, pageSize, limit, offset } = parsePagination(req.query);
+    const { rows, count } = await Fee.findAndCountAll({
+      where, include, order: [['pending_due', 'DESC']], limit, offset, distinct: true,
+    });
+    return res.json({ rows, total: count, page, pageSize });
+  }
+
+  const fees = await Fee.findAll({ where, include, order: [['pending_due', 'DESC']] });
   res.json(fees);
 };
 
-// FR-F5: year-wise collection report
+// FR-F5: year-wise collection report.
+// Collected is the actual money received (sum of receipt amounts); pending is the
+// net outstanding (consolidateYearBalance keeps pending_due free of double
+// counting); billed = collected + pending. Summing total_course_fee would
+// double-count a year billed across several installment receipts.
 exports.reportByYear = async (_req, res) => {
   const rows = await Fee.findAll({
     attributes: [
       'academic_year',
-      [fn('SUM', col('total_course_fee')), 'total_billed'],
+      [fn('SUM', literal('COALESCE(kea_fee,0) + COALESCE(regn_fee,0) + COALESCE(tuition_fee,0)')), 'total_collected'],
       [fn('SUM', col('pending_due')), 'total_pending'],
-      [fn('SUM', literal('total_course_fee - pending_due')), 'total_collected'],
+      [fn('SUM', literal('COALESCE(kea_fee,0) + COALESCE(regn_fee,0) + COALESCE(tuition_fee,0) + COALESCE(pending_due,0)')), 'total_billed'],
       [fn('COUNT', col('fee_id')), 'receipts'],
     ],
     group: ['academic_year'],
@@ -278,13 +397,16 @@ exports.reportByYear = async (_req, res) => {
   res.json(rows);
 };
 
-// FR-F6: course-wise collection report
+// FR-F6: course-wise collection report. Same net-based definitions as
+// reportByYear so installments never double-count (collected = money received,
+// pending = net outstanding, billed = collected + pending).
 exports.reportByCourse = async (_req, res) => {
   const rows = await sequelize.query(
     `SELECT c.course_name AS course_name,
-            SUM(f.total_course_fee)               AS total_billed,
-            SUM(f.pending_due)                    AS total_pending,
-            SUM(f.total_course_fee - f.pending_due) AS total_collected
+            SUM(COALESCE(f.kea_fee,0) + COALESCE(f.regn_fee,0) + COALESCE(f.tuition_fee,0)
+                + COALESCE(f.pending_due,0))                                AS total_billed,
+            SUM(f.pending_due)                                              AS total_pending,
+            SUM(COALESCE(f.kea_fee,0) + COALESCE(f.regn_fee,0) + COALESCE(f.tuition_fee,0)) AS total_collected
        FROM fee f
        JOIN admission a ON a.adm_id = f.adm_id
        JOIN courses   c ON c.course_id = a.course_id
@@ -322,7 +444,7 @@ exports.receiptPdf = async (req, res) => {
   doc.moveDown(0.5);
   line('Student', student?.student_name);
   line('USN', student?.usn || '(USN pending)');
-  line('CSN', student?.csn);
+  line('DSN', student?.dsn);
   line('Course', course?.course_name);
   doc.moveDown(0.5);
   line('KEA Fee', fee.kea_fee);
@@ -337,3 +459,7 @@ exports.receiptPdf = async (req, res) => {
 
   doc.end();
 };
+
+// Exported for the one-time backfill script (scripts/backfill_fee_balances.js).
+exports.consolidateYearBalance = consolidateYearBalance;
+exports.getAdmissionSlabs = getAdmissionSlabs;

@@ -27,7 +27,8 @@ CREATE TABLE courses (
   course_id     INT AUTO_INCREMENT PRIMARY KEY,
   course_name   VARCHAR(100) NOT NULL,
   intake        INT,
-  yearly_intake YEAR
+  yearly_intake YEAR,
+  custom_fields JSON                           -- admin-defined extra fields (see custom_field)
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -40,6 +41,7 @@ CREATE TABLE staff (
   designation VARCHAR(60),
   email       VARCHAR(100) UNIQUE,
   mobile      VARCHAR(15)  UNIQUE,
+  custom_fields JSON,                         -- admin-defined extra fields (see custom_field)
   CONSTRAINT fk_staff_course FOREIGN KEY (course_id)
     REFERENCES courses(course_id)
 ) ENGINE=InnoDB;
@@ -48,10 +50,10 @@ CREATE TABLE staff (
 -- 5.1 STUDENT — core academic record (one row per student)
 -- usn is NULLABLE; UNIQUE applies only to non-null values (MySQL default)
 -- ---------------------------------------------------------------------
--- csn is NOT auto-increment: the application generates it as a year-wise
+-- dsn is NOT auto-increment: the application generates it as a year-wise
 -- running number, e.g. 20260001 = year 2026 + 4-digit sequence 0001.
 CREATE TABLE student (
-  csn          INT PRIMARY KEY,
+  dsn          INT PRIMARY KEY,
   student_name VARCHAR(100) NOT NULL,
   course_id    INT NOT NULL,
   usn          VARCHAR(20) UNIQUE,             -- NULL until university allots it
@@ -65,7 +67,7 @@ CREATE TABLE student (
 -- 5.2 STUDENT_PERSONAL_DETAILS — 1:1 extension of STUDENT
 -- ---------------------------------------------------------------------
 CREATE TABLE student_personal_details (
-  csn            INT PRIMARY KEY,
+  dsn            INT PRIMARY KEY,
   father_name    VARCHAR(100),
   mother_name    VARCHAR(100),
   per_address    TEXT,
@@ -80,8 +82,8 @@ CREATE TABLE student_personal_details (
   parent_mobile  VARCHAR(15),
   blood_group    VARCHAR(5),
   aadhar_no      VARCHAR(20) UNIQUE,
-  CONSTRAINT fk_spd_student FOREIGN KEY (csn)
-    REFERENCES student(csn) ON DELETE CASCADE
+  CONSTRAINT fk_spd_student FOREIGN KEY (dsn)
+    REFERENCES student(dsn) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -89,7 +91,7 @@ CREATE TABLE student_personal_details (
 -- ---------------------------------------------------------------------
 CREATE TABLE admission (
   adm_id            INT AUTO_INCREMENT PRIMARY KEY,
-  csn               INT NOT NULL,
+  dsn               INT NOT NULL,
   course_id         INT NOT NULL,
   kea_ad_no         VARCHAR(30),
   academic_year     VARCHAR(10),
@@ -105,8 +107,8 @@ CREATE TABLE admission (
   hostel_needed     BOOLEAN NOT NULL DEFAULT FALSE,
   hostel_allocated  BOOLEAN NOT NULL DEFAULT FALSE, -- only meaningful when hostel_needed
   custom_fields     JSON,                      -- admin-defined extra fields (see custom_field)
-  CONSTRAINT fk_adm_student FOREIGN KEY (csn)
-    REFERENCES student(csn) ON DELETE CASCADE,
+  CONSTRAINT fk_adm_student FOREIGN KEY (dsn)
+    REFERENCES student(dsn) ON DELETE CASCADE,
   CONSTRAINT fk_adm_course FOREIGN KEY (course_id)
     REFERENCES courses(course_id)
 ) ENGINE=InnoDB;
@@ -183,6 +185,7 @@ CREATE TABLE certificate (
   issued_by  VARCHAR(100),
   remarks    TEXT,
   tc_details TEXT,                          -- JSON of staff-entered TC fields (rows h–n, T.C. No., dates)
+  custom_fields JSON,                       -- admin-defined extra fields (see custom_field)
   CONSTRAINT fk_cert_admission FOREIGN KEY (adm_id)
     REFERENCES admission(adm_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -225,3 +228,6 @@ CREATE INDEX idx_spd_student_mobile ON student_personal_details(student_mobile);
 CREATE INDEX idx_spd_parent_mobile ON student_personal_details(parent_mobile);
 CREATE INDEX idx_fee_status ON fee(payment_status);
 CREATE INDEX idx_fee_year ON fee(academic_year);
+-- Scale: dashboard batch scoping + pending-dues report scans
+CREATE INDEX idx_admission_academic_year ON admission(academic_year);
+CREATE INDEX idx_fee_pending_due ON fee(pending_due);

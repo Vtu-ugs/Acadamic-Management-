@@ -3,7 +3,7 @@ const sequelize = require('../config/database');
 
 // 5.2 STUDENT_PERSONAL_DETAILS — 1:1 with STUDENT
 const StudentPersonalDetails = sequelize.define('student_personal_details', {
-  csn:            { type: DataTypes.INTEGER, primaryKey: true },
+  dsn:            { type: DataTypes.INTEGER, primaryKey: true },
   father_name:    { type: DataTypes.STRING(100) },
   mother_name:    { type: DataTypes.STRING(100) },
   per_address:    { type: DataTypes.TEXT },

@@ -50,10 +50,10 @@ const ROLE_ROUTES = {
   admission_staff: [
     '/', '/students', '/admissions', '/fees', '/fee-structure',
     '/fee-reports', '/fee-ledger', '/certificates', '/courses',
-    '/usn-pending', '/import-export',
+    '/usn-pending', '/import-export', '/change-password',
   ],
-  // Staff users can only work on their own weekly diary — nothing else.
-  staff: ['/diary'],
+  // Staff users can only work on their own weekly diary — plus their own password.
+  staff: ['/diary', '/change-password'],
 };
 
 const HOME_BY_ROLE = { admin: '/', admission_staff: '/admissions', staff: '/diary' };

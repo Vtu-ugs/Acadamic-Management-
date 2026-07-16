@@ -2,7 +2,7 @@ const XLSX = require('xlsx');
 const {
   sequelize, Student, StudentPersonalDetails, Course, Admission, Fee,
 } = require('../models');
-const { generateCsn, withCsnRetry } = require('../utils/csn');
+const { generateDsn, withDsnRetry } = require('../utils/dsn');
 
 // Documented column mapping (NFR Data Portability). Header -> target model
 // 's' = student (academic), 'p' = student_personal_details
@@ -67,7 +67,7 @@ exports.exportStudents = async (req, res) => {
       { model: Course },
       { model: Admission, include: [{ model: Fee }] },
     ],
-    order: [['csn', 'ASC']],
+    order: [['dsn', 'ASC']],
   });
 
   const rows = students.map((s) => {
@@ -75,7 +75,7 @@ exports.exportStudents = async (req, res) => {
     const adm = (s.admissions && s.admissions[0]) || {};
     const fee = (adm.fees && adm.fees[0]) || {};
     return {
-      csn: s.csn,
+      dsn: s.dsn,
       student_name: s.student_name,
       course_id: s.course_id,
       course_name: s.course?.course_name,
@@ -206,8 +206,8 @@ exports.importStudents = async (req, res) => {
         (target === 's' ? academic : personal)[key] = normalise ? normalise(row[key]) : row[key];
       }
       academic.usn = usn; // normalized (NULL when blank)
-      // year-wise csn: honour a csn_year column if present, else current year
-      const year = row.csn_year ? Number(row.csn_year) : new Date().getFullYear();
+      // year-wise dsn: honour a dsn_year column if present, else current year
+      const year = row.dsn_year ? Number(row.dsn_year) : new Date().getFullYear();
 
       const admissionData = pickAdmission(row);
       const feeData = pickFee(row);
@@ -216,16 +216,16 @@ exports.importStudents = async (req, res) => {
         throw new Error('Fee columns present but no admission data — add adm_* columns for this row');
       }
 
-      await withCsnRetry(() => sequelize.transaction(async (t) => {
-        const csn = await generateCsn(t, year);
-        const student = await Student.create({ ...academic, csn }, { transaction: t });
+      await withDsnRetry(() => sequelize.transaction(async (t) => {
+        const dsn = await generateDsn(t, year);
+        const student = await Student.create({ ...academic, dsn }, { transaction: t });
         await StudentPersonalDetails.create(
-          { ...personal, csn: student.csn }, { transaction: t }
+          { ...personal, dsn: student.dsn }, { transaction: t }
         );
 
         if (admissionData) {
           const admission = await Admission.create(
-            { ...admissionData, csn: student.csn, course_id: student.course_id },
+            { ...admissionData, dsn: student.dsn, course_id: student.course_id },
             { transaction: t }
           );
           if (feeData) {
@@ -235,7 +235,7 @@ exports.importStudents = async (req, res) => {
             );
           }
         }
-        inserted.push(student.csn);
+        inserted.push(student.dsn);
       }));
     } catch (err) {
       errors.push({ row: rowNo, reason: err.message, data: row });
@@ -244,7 +244,7 @@ exports.importStudents = async (req, res) => {
 
   res.json({
     summary: { total: records.length, inserted: inserted.length, rejected: errors.length },
-    insertedCsns: inserted,
+    insertedDsns: inserted,
     errors,
   });
 };

@@ -4,6 +4,7 @@ import CrudPage from '../components/CrudPage.jsx';
 export default function Courses() {
   return (
     <CrudPage
+      customFieldsEntity="course"
       title="Courses"
       subtitle="Master list of programs — add new courses with no schema change (NFR Scalability)"
       path="/courses"

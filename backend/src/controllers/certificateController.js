@@ -3,6 +3,7 @@ const PDFDocument = require('pdfkit');
 const {
   Certificate, Admission, Student, StudentPersonalDetails, Course, FeeStructure, Staff,
 } = require('../models');
+const { isPaged, parsePagination } = require('../utils/paginate');
 
 // Ordinal year of study derived from the current semester (1-2 -> 1st, …).
 const yearOfStudy = (semester) => {
@@ -21,6 +22,19 @@ const ordinal = (n) => {
 const discipline = (courseName) => (courseName || '')
   .replace(/^\s*(B\.?E\.?|B\.?Tech\.?|M\.?C\.?A\.?|M\.?Tech\.?|M\.?E\.?)\s*[-–:]?\s*/i, '')
   .trim() || (courseName || '');
+
+// Department code for the certificate Ref No, derived from the discipline as an
+// acronym of its significant words (e.g. "Computer Science & Engineering" -> CSE,
+// "Master of Computer Application" -> MCA). Falls back to "PG" when it can't.
+const STOP_WORDS = new Set(['and', 'of', 'the', 'in', 'for', 'with', '&']);
+const deptCode = (disciplineName) => {
+  const code = String(disciplineName || '')
+    .split(/[^A-Za-z0-9]+/)
+    .filter((w) => w && !STOP_WORDS.has(w.toLowerCase()))
+    .map((w) => w[0].toUpperCase())
+    .join('');
+  return code || 'PG';
+};
 
 // Map a course name to a fee_structure.program bucket (BE / MCA / MTech).
 const programOf = (courseName = '') => {
@@ -87,11 +101,18 @@ const findChairperson = async (courseId) => {
 exports.list = async (req, res) => {
   const where = {};
   if (req.query.adm_id) where.adm_id = req.query.adm_id;
-  const certs = await Certificate.findAll({
-    where,
-    include: [{ model: Admission, include: [{ model: Student }, { model: Course }] }],
-    order: [['cert_id', 'DESC']],
-  });
+  const include = [{ model: Admission, include: [{ model: Student }, { model: Course }] }];
+
+  // Opt-in pagination (see utils/paginate); plain array otherwise.
+  if (isPaged(req.query)) {
+    const { page, pageSize, limit, offset } = parsePagination(req.query);
+    const { rows, count } = await Certificate.findAndCountAll({
+      where, include, order: [['cert_id', 'DESC']], limit, offset, distinct: true,
+    });
+    return res.json({ rows, total: count, page, pageSize });
+  }
+
+  const certs = await Certificate.findAll({ where, include, order: [['cert_id', 'DESC']] });
   res.json(certs);
 };
 
@@ -165,7 +186,7 @@ exports.generatePdf = async (req, res) => {
   // ---------- Ref No + Date ----------
   const refY = doc.y;
   doc.font('Helvetica').fontSize(10)
-    .text(`Ref No: VTU/BGM/CSE/PG/${acadYear || new Date().getFullYear()}/`, L, refY);
+    .text(`Ref No: VTU/BGM/${deptCode(dept)}/PG/${acadYear || new Date().getFullYear()}/`, L, refY);
   doc.font('Helvetica-Bold').fontSize(11).text(`DATE: ${cert.issue_date}`, L, refY, { width: R - L, align: 'right' });
   doc.moveDown(1.5);
 

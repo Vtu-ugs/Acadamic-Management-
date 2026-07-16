@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
+const { customFieldsAttribute } = require('../utils/customFields');
 
 // 5.8 STAFF
 const Staff = sequelize.define('staff', {
@@ -11,6 +12,7 @@ const Staff = sequelize.define('staff', {
   // 10-digit Indian mobile (starts 6-9); empty allowed. Matches the rule already
   // enforced on the student/parent mobiles in StudentPersonalDetails.
   mobile:      { type: DataTypes.STRING(15), unique: true, validate: { is: { args: /^([6-9]\d{9})?$/, msg: 'Mobile must be a valid 10-digit number' } } },
+  custom_fields: customFieldsAttribute(),
 });
 
 module.exports = Staff;

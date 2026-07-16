@@ -1,10 +1,13 @@
-import { useApi } from '../components/useApi.js';
+import { useApi, usePagedApi } from '../components/useApi.js';
+import Pager from '../components/Pager.jsx';
 
 // FR-F3, FR-F5, FR-F6 — financial reports
 export default function FeeReports() {
   const byYear = useApi('/fees/report/by-year');
   const byCourse = useApi('/fees/report/by-course');
-  const dues = useApi('/fees/report/pending-dues');
+  // The dues list can be long, so it is server-paged; the two collection
+  // summaries above are already aggregated to a handful of rows.
+  const dues = usePagedApi('/fees/report/pending-dues');
 
   const money = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
 
@@ -48,7 +51,7 @@ export default function FeeReports() {
         <table>
           <thead><tr><th>Receipt</th><th>Student</th><th>Course</th><th>Pending Due</th></tr></thead>
           <tbody>
-            {dues.data?.map((f) => (
+            {dues.rows?.map((f) => (
               <tr key={f.fee_id}>
                 <td>{f.receipt_number}</td>
                 <td>{f.admission?.student?.student_name}</td>
@@ -56,9 +59,10 @@ export default function FeeReports() {
                 <td>{money(f.pending_due)}</td>
               </tr>
             ))}
-            {dues.data?.length === 0 && <tr><td colSpan="4" className="muted">No outstanding dues.</td></tr>}
+            {dues.rows?.length === 0 && <tr><td colSpan="4" className="muted">No outstanding dues.</td></tr>}
           </tbody>
         </table>
+        <Pager page={dues.page} pageSize={dues.pageSize} total={dues.total} onPage={dues.setPage} />
       </div>
     </div>
   );

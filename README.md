@@ -52,6 +52,51 @@ mysql -u root -p < database/schema.sql
 mysql -u root -p < database/seed.sql      # optional sample data
 ```
 
+### Run the whole app with Docker (one command)
+
+The fastest path — no Node/XAMPP needed, just
+[Docker Desktop](https://www.docker.com/products/docker-desktop/). It builds and
+runs **database + backend + frontend** together.
+
+**One-time:** seed the database from your existing data (stop XAMPP's MySQL
+first, both use port 3306):
+
+```bash
+"C:\xampp\mysql\bin\mysqldump.exe" -u root office_management > database/docker-init/01-data.sql
+```
+
+That dump has the full schema + your records + logins; it auto-loads on first
+run. (No existing data? See `database/docker-init/README.md`.)
+
+**Then, from the project root:**
+
+```bash
+docker compose up -d --build     # build + start everything
+docker compose ps                # wait until all services are healthy
+```
+
+Open **http://localhost:8080** — the frontend serves the app and proxies `/api`
+to the backend. Useful commands:
+
+```bash
+docker compose logs -f backend   # tail API logs
+docker compose down              # stop (keeps the database volume)
+docker compose down -v           # stop AND wipe the database (fresh slate)
+```
+
+Before hosting on a public server, change `MYSQL_ROOT_PASSWORD`, `DB_PASSWORD`
+and `JWT_SECRET` in `docker-compose.yml`, and put the app behind HTTPS.
+
+#### Just the database in Docker (for local `npm run dev`)
+
+```bash
+docker compose up -d db          # only MySQL 8, on localhost:3306
+```
+
+Then set `DB_PASSWORD=office_dev_pw` in `backend/.env` and run the backend and
+frontend the classic way (below). Reset the DB anytime with
+`docker compose down -v`.
+
 ### 2. Backend
 
 ```bash
@@ -80,9 +125,9 @@ Base path: `/api`
 
 | Module        | Endpoints |
 |---------------|-----------|
-| Students      | `GET/POST /students`, `GET/PUT/DELETE /students/:csn`, `GET /students/search?q=`, `GET /students/usn-pending`, `PATCH /students/:csn/usn`, `GET /students/export`, `POST /students/import` |
+| Students      | `GET/POST /students`, `GET/PUT/DELETE /students/:dsn`, `GET /students/search?q=`, `GET /students/usn-pending`, `PATCH /students/:dsn/usn`, `GET /students/export`, `POST /students/import` |
 | Admissions    | `GET/POST /admissions`, `GET/PUT/DELETE /admissions/:id` |
-| Fees          | `GET/POST /fees`, `GET /fees/student/:csn`, `GET /fees/:id/receipt.pdf`, `GET /fees/report/by-year`, `GET /fees/report/by-course`, `GET /fees/report/pending-dues` |
+| Fees          | `GET/POST /fees`, `GET /fees/student/:dsn`, `GET /fees/:id/receipt.pdf`, `GET /fees/report/by-year`, `GET /fees/report/by-course`, `GET /fees/report/pending-dues` |
 | Certificates  | `GET/POST /certificates`, `DELETE /certificates/:id`, `GET /certificates/:id/document.pdf` |
 | Courses       | `GET/POST/PUT/DELETE /courses` |
 | Staff         | `GET/POST/PUT/DELETE /staff` |
@@ -92,7 +137,7 @@ Base path: `/api`
 ## PRD Requirement Coverage
 
 - **Student (FR-S1…S8):** add/edit with personal details, USN-pending lifecycle
-  (`csn` interim key → `usn` allotted later), priority search (USN → name → mobile → csn),
+  (`dsn` interim key → `usn` allotted later), priority search (USN → name → mobile → dsn),
   USN-pending report, Excel import/export with duplicate USN/Aadhar validation.
 - **Financial (FR-F1…F8):** fee recording with auto `pending_due` / `payment_status`,
   PDF receipts, student-wise history, year-/course-wise reports, dues report, loan fields.

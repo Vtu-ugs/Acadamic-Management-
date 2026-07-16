@@ -40,10 +40,29 @@ function coerce(value, fieldType) {
   return String(value);
 }
 
+// Each entry is stored as { label, value } so the JSON reads on its own —
+// browsing the table shows "Bus Route": "Route 2", not a bare slug. The key is
+// still the immutable field_key: renaming a label must not orphan its values.
+//
+// Callers may submit either shape. `{ bus_route: "Route 2" }` and
+// `{ bus_route: { label: …, value: "Route 2" } }` both mean the same thing, and
+// the label written is always the current one from the definition, never
+// whatever a client happened to send.
+const unwrapValue = (entry) => (
+  entry && typeof entry === 'object' && !Array.isArray(entry) && 'value' in entry
+    ? entry.value
+    : entry
+);
+const unwrapLabel = (entry, fallback) => (
+  entry && typeof entry === 'object' && !Array.isArray(entry) && typeof entry.label === 'string'
+    ? entry.label
+    : fallback
+);
+
 // Registers a beforeSave hook that sanitises the model's `custom_fields` JSON.
 //
-// Two rules, both enforced here rather than in the controllers, so an import or
-// a direct API call obeys them exactly as the form does:
+// Three rules, enforced here rather than in the controllers, so an import or a
+// direct API call obeys them exactly as the form does:
 //
 //   1. Only keys matching a defined field for this entity are stored. Anything
 //      else is dropped, so the JSON column can't accumulate junk keys.
@@ -51,6 +70,9 @@ function coerce(value, fieldType) {
 //      names them. That is what makes retiring a field non-destructive: a
 //      hidden field is absent from every form submission, and its value has to
 //      survive those saves to still be there when an admin restores it.
+//   3. Every entry is rewritten as { label, value }, with the label refreshed
+//      from the definition — so renaming a field updates the stored labels the
+//      next time each row is saved, and a stale label can never contradict it.
 function attachCustomFields(Model, entity) {
   Model.addHook('beforeSave', async (instance) => {
     if (!instance.changed('custom_fields')) return;
@@ -71,16 +93,24 @@ function attachCustomFields(Model, entity) {
     const defs = await CustomField.findAll({ where: { entity } });
     const byKey = new Map(defs.map((d) => [d.field_key, d]));
 
-    const merged = { ...previous };
-    for (const [key, value] of Object.entries(incoming)) {
+    // Rule 2: carry every stored entry forward, refreshing its label (rule 3).
+    const merged = {};
+    for (const [key, entry] of Object.entries(previous)) {
+      merged[key] = {
+        label: byKey.get(key)?.label ?? unwrapLabel(entry, key),
+        value: unwrapValue(entry),
+      };
+    }
+
+    for (const [key, entry] of Object.entries(incoming)) {
       const def = byKey.get(key);
       if (!def) continue;             // rule 1: unknown key, drop it
-      merged[key] = coerce(value, def.field_type);
+      merged[key] = { label: def.label, value: coerce(unwrapValue(entry), def.field_type) };
     }
-    instance.custom_fields = merged;  // rule 2: previous keys survive
+    instance.custom_fields = merged;
   });
 }
 
 module.exports = {
-  attachCustomFields, coerce, asObject, customFieldsAttribute,
+  attachCustomFields, coerce, asObject, customFieldsAttribute, unwrapValue, unwrapLabel,
 };

@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Migration: 2026-27 batch fee structure (default values)
--- Students admitted in 2026-27 (CSN 2026xxxx) follow these slabs for the
+-- Students admitted in 2026-27 (DSN 2026xxxx) follow these slabs for the
 -- whole course. These are default figures (~5% revision over 2025-26) and
 -- can be edited any time under the Fee Structure page.
 -- =====================================================================

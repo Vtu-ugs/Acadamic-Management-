@@ -1,0 +1,65 @@
+# Full-stack Academic Management System — the whole app in one command.
+#
+#   docker compose up -d --build      # build + start db, backend, frontend
+#   open  http://localhost:8080       # the app (API is proxied under /api)
+#
+#   docker compose ps                 # check health
+#   docker compose logs -f backend    # tail backend logs
+#   docker compose down               # stop (database volume kept)
+#   docker compose down -v            # stop AND wipe the database
+#
+# FIRST-RUN DATABASE: on an empty volume, MySQL auto-runs every *.sql in
+# database/docker-init/. Put your data there first (one-time):
+#   "C:\xampp\mysql\bin\mysqldump.exe" -u root office_management > database/docker-init/01-data.sql
+# (That dump carries the complete schema + your records + login accounts.)
+# To run ONLY the database for local `npm run dev`: docker compose up -d db
+services:
+  db:
+    image: mysql:8
+    container_name: ams-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: office_dev_pw       # local/dev — change for real hosting
+      MYSQL_DATABASE: office_management
+    ports:
+      - "3306:3306"                            # stop XAMPP MySQL first, or use "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/docker-init:/docker-entrypoint-initdb.d:ro   # auto-loaded on first init
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-poffice_dev_pw"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: ams-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy             # wait until MySQL is ready
+    environment:
+      PORT: 4000
+      DB_HOST: db                              # the compose service name
+      DB_PORT: 3306
+      DB_NAME: office_management
+      DB_USER: root
+      DB_PASSWORD: office_dev_pw
+      JWT_SECRET: change-me-to-a-long-random-string
+      CORS_ORIGIN: http://localhost:8080
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build: ./frontend
+    container_name: ams-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+
+volumes:
+  mysql_data:

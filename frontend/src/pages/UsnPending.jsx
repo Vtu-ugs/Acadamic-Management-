@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { api } from '../api';
-import { useApi } from '../components/useApi.js';
+import { usePagedApi } from '../components/useApi.js';
+import Pager from '../components/Pager.jsx';
 
 // FR-S3a: track and follow up on USN allotment
 export default function UsnPending() {
-  const { data, loading, error, reload } = useApi('/students/usn-pending');
+  const {
+    rows: data, total, page, pageSize, setPage, loading, error, reload,
+  } = usePagedApi('/students/usn-pending');
   const [busy, setBusy] = useState(null);
 
-  const setUsn = async (csn) => {
-    const usn = prompt(`Enter allotted USN for CSN ${csn}:`);
+  const setUsn = async (dsn) => {
+    const usn = prompt(`Enter allotted USN for DSN ${dsn}:`);
     if (!usn) return;
-    setBusy(csn);
-    try { await api.patch(`/students/${csn}/usn`, { usn }); reload(); }
+    setBusy(dsn);
+    try { await api.patch(`/students/${dsn}/usn`, { usn }); reload(); }
     catch (e) { alert(e.message); }
     finally { setBusy(null); }
   };
@@ -24,13 +27,13 @@ export default function UsnPending() {
       <div className="card">
         {loading ? <p className="muted">Loading…</p> : (
           <table>
-            <thead><tr><th>CSN</th><th>Name</th><th>Course</th><th>Sem</th><th>Action</th></tr></thead>
+            <thead><tr><th>DSN</th><th>Name</th><th>Course</th><th>Sem</th><th>Action</th></tr></thead>
             <tbody>
               {data?.map((s) => (
-                <tr key={s.csn}>
-                  <td>{s.csn}</td><td>{s.student_name}</td>
+                <tr key={s.dsn}>
+                  <td>{s.dsn}</td><td>{s.student_name}</td>
                   <td>{s.course?.course_name}</td><td>{s.semester}</td>
-                  <td><button className="link" disabled={busy === s.csn} onClick={() => setUsn(s.csn)}>Allot USN</button></td>
+                  <td><button className="link" disabled={busy === s.dsn} onClick={() => setUsn(s.dsn)}>Allot USN</button></td>
                 </tr>
               ))}
               {data?.length === 0 && <tr><td colSpan="5" className="muted">No pending USNs 🎉</td></tr>}
@@ -38,6 +41,7 @@ export default function UsnPending() {
           </table>
         )}
       </div>
+      <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} />
     </div>
   );
 }

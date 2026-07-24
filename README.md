@@ -150,9 +150,32 @@ Base path: `/api`
 
 - `usn` is `UNIQUE` but nullable — MySQL permits multiple `NULL`s, which is the desired
   "USN pending" behaviour (PRD §5.1). Uniqueness is enforced in the app on USN update/import.
-- Auth/RBAC (PRD §4) is **not** implemented in this scaffold — all endpoints are open.
-  Add an auth middleware + a `users` table before production use.
-- For production deployment guidance (PM2, Nginx, HTTPS, backups) see PRD §11.
+- Auth/RBAC (PRD §4) **is** implemented: JWT login (`/api/auth`), an `app_user`
+  table with `admin` / `admission_staff` / `staff` roles, per-module route guards
+  (`backend/src/middleware/auth.js`), and an activity/audit log. The frontend
+  mirrors the same allow-list in `App.jsx` (`ROLE_ROUTES`).
+- For production deployment guidance (PM2, Nginx, HTTPS, backups) see PRD §11 and
+  [`SECURITY.md`](./SECURITY.md).
+
+## Tests & linting
+
+```bash
+# Backend — unit tests are DB-free; integration tests need a MySQL to point at.
+cd backend
+npm run lint
+npm run test:unit                  # fast, no database
+# Integration (fee engine + auth). Provide a reachable MySQL; a throwaway
+# `office_management_test` schema is created and dropped automatically:
+DB_HOST=127.0.0.1 DB_USER=root DB_PASSWORD=your_pw npm run test:integration
+
+# Frontend
+cd frontend
+npm run lint
+npm test
+```
+
+CI runs all of the above (plus `docker compose build`) on every push/PR — see
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
 
 ## Production build
 
@@ -160,3 +183,15 @@ Base path: `/api`
 cd frontend && npm run build      # outputs frontend/dist (serve via Nginx)
 cd backend  && npm start          # run under PM2 in production
 ```
+
+## Production hardening
+
+The app ships with runtime hardening: `helmet` security headers, request rate
+limiting (with a stricter limit on `/api/auth/login`), a 1 MB JSON body cap,
+bounded/type-checked file uploads, sanitized error responses (no internals
+leaked), graceful shutdown, and a non-root Docker image. Nginx adds security
+headers, `server_tokens off`, gzip and asset caching.
+
+**The backend refuses to start in `NODE_ENV=production` with an insecure config**
+(default/short `JWT_SECRET`, or an empty `DB_PASSWORD`). Before deploying, set
+strong secrets — see [`SECURITY.md`](./SECURITY.md) for the full checklist.

@@ -68,6 +68,7 @@ attachCustomFields(Certificate, 'certificate');
 attachCustomFields(Staff, 'staff');
 // Entity key is singular `course`; the table it maps to is `courses`.
 attachCustomFields(Course, 'course');
+attachCustomFields(FeeStructure, 'fee_structure');
 
 module.exports = {
   sequelize,

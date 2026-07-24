@@ -13,7 +13,7 @@ export function useApi(path, deps = []) {
       .then((d) => { setData(d); setError(null); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [path]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps

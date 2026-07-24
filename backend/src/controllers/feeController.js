@@ -3,7 +3,7 @@ const { fn, col, literal, QueryTypes, Op } = require('sequelize');
 const {
   sequelize, Fee, Admission, Student, Course, FeeStructure,
 } = require('../models');
-const { isPaged, parsePagination } = require('../utils/paginate');
+const { isPaged, parsePagination, UNPAGED_MAX } = require('../utils/paginate');
 const { logActivity } = require('../utils/activityLog');
 
 // ---------------------------------------------------------------------------
@@ -215,7 +215,9 @@ exports.list = async (req, res) => {
     return res.json({ rows, total: count, page, pageSize });
   }
 
-  const fees = await Fee.findAll({ where, include, order: [['fee_id', 'DESC']] });
+  const fees = await Fee.findAll({
+    where, include, order: [['fee_id', 'DESC']], limit: UNPAGED_MAX, // safety cap
+  });
   res.json(fees);
 };
 
@@ -373,7 +375,9 @@ exports.pendingDues = async (req, res) => {
     return res.json({ rows, total: count, page, pageSize });
   }
 
-  const fees = await Fee.findAll({ where, include, order: [['pending_due', 'DESC']] });
+  const fees = await Fee.findAll({
+    where, include, order: [['pending_due', 'DESC']], limit: UNPAGED_MAX, // safety cap
+  });
   res.json(fees);
 };
 

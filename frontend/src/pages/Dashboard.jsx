@@ -60,7 +60,7 @@ export default function Dashboard() {
       {data && (
         <>
           <h3 className="section-title">Branch-wise Statistics <span className="muted">({scopeLabel})</span></h3>
-          <p className="page-sub">Click a branch to see its caste-wise details.</p>
+          <p className="page-sub">Click a branch to see its students (name / DSN / USN) and caste-wise details.</p>
           {branches.length === 0 ? (
             <p className="muted">No branches to show.</p>
           ) : (
@@ -97,19 +97,30 @@ export default function Dashboard() {
       )}
 
       {selected && (
-        <BranchDetail branch={selected} scopeLabel={scopeLabel} onClose={() => setSelected(null)} />
+        <BranchDetail branch={selected} year={year} scopeLabel={scopeLabel} onClose={() => setSelected(null)} />
       )}
     </div>
   );
 }
 
-function BranchDetail({ branch, scopeLabel, onClose }) {
+function BranchDetail({ branch, year, scopeLabel, onClose }) {
   // Caste/category breakdown, biggest group first.
   const cats = Object.entries(branch.categories || {}).sort((a, b) => b[1] - a[1]);
 
+  // The course roster (name / DSN / USN), loaded on demand for this branch.
+  const [students, setStudents] = useState(null);
+  const [rosterError, setRosterError] = useState(null);
+  useEffect(() => {
+    setStudents(null);
+    setRosterError(null);
+    api.get(`/dashboard/course-students?course_id=${branch.course_id}&academic_year=${encodeURIComponent(year)}`)
+      .then(setStudents)
+      .catch((e) => setRosterError(e.message));
+  }, [branch.course_id, year]);
+
   return (
     <Modal title={`${branch.course_name} — ${scopeLabel}`} onClose={onClose}>
-      <div className="branch-figures" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="branch-figures" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(5, 1fr)' }}>
         <div className="fig">
           <div className="fig-num">{branch.intake ?? '-'}</div>
           <div className="fig-lbl">Total Intake</div>
@@ -117,6 +128,10 @@ function BranchDetail({ branch, scopeLabel, onClose }) {
         <div className="fig">
           <div className="fig-num">{branch.total_students}</div>
           <div className="fig-lbl">Total Students</div>
+        </div>
+        <div className="fig">
+          <div className="fig-num">{branch.lateral_count || 0}</div>
+          <div className="fig-lbl">Lateral Entry</div>
         </div>
         <div className="fig">
           <div className="fig-num">
@@ -130,7 +145,32 @@ function BranchDetail({ branch, scopeLabel, onClose }) {
         </div>
       </div>
 
-      <div className="caste-title">Caste-wise (Category)</div>
+      <div className="caste-title">Students</div>
+      {rosterError ? (
+        <div className="error">{rosterError}</div>
+      ) : students === null ? (
+        <div className="caste-empty">Loading…</div>
+      ) : students.length === 0 ? (
+        <div className="caste-empty">No students yet</div>
+      ) : (
+        <table>
+          <thead>
+            <tr><th>Sl. No.</th><th>Student Name</th><th>DSN</th><th>USN</th></tr>
+          </thead>
+          <tbody>
+            {students.map((s, i) => (
+              <tr key={s.dsn}>
+                <td>{i + 1}</td>
+                <td>{s.student_name}</td>
+                <td>{s.dsn}</td>
+                <td>{s.usn || <span className="muted">pending</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="caste-title" style={{ marginTop: 18 }}>Caste-wise (Category)</div>
       {cats.length === 0 ? (
         <div className="caste-empty">No students yet</div>
       ) : (

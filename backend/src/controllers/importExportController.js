@@ -1,8 +1,50 @@
 const XLSX = require('xlsx');
 const {
-  sequelize, Student, StudentPersonalDetails, Course, Admission, Fee,
+  sequelize, Student, StudentPersonalDetails, Course, Admission, Fee, CustomField,
 } = require('../models');
 const { generateDsn, withDsnRetry } = require('../utils/dsn');
+const { unwrapValue } = require('../utils/customFields');
+
+// Admin-defined custom fields ride along in the Students sheet, one column per
+// defined field, prefixed by which record they belong to so they never collide
+// with a built-in column: student -> cf_<key>, admission -> adm_cf_<key>,
+// fee -> fee_cf_<key>. On import the model's beforeSave hook validates/coerces
+// each value and drops any key that isn't a defined field, exactly like a form.
+const CF_PREFIX = { student: 'cf_', admission: 'adm_cf_', fee: 'fee_cf_' };
+
+// Load active custom-field definitions for the three entities carried by the
+// sheet, grouped by entity in display order.
+async function loadCustomFieldDefs() {
+  const defs = await CustomField.findAll({
+    where: { entity: ['student', 'admission', 'fee'], is_active: true },
+    order: [['entity', 'ASC'], ['sort_order', 'ASC'], ['cf_id', 'ASC']],
+  });
+  return defs;
+}
+
+// Read one custom value out of a record's stored custom_fields JSON (may be null
+// on a new/absent record). Returns '' so empty cells export cleanly.
+function readCustom(customFields, key) {
+  if (!customFields) return '';
+  const v = unwrapValue(customFields[key]);
+  return v == null ? '' : v;
+}
+
+// Collect the custom-field columns for one prefix into a plain { key: value }
+// object, or null if the row has none. Unknown keys are harmless — the hook
+// drops them — so we don't need the definitions here.
+function pickCustom(row, prefix) {
+  const cf = {};
+  let has = false;
+  for (const col of Object.keys(row)) {
+    if (!col.startsWith(prefix)) continue;
+    const v = row[col];
+    if (v == null || v === '') continue;
+    cf[col.slice(prefix.length)] = v;
+    has = true;
+  }
+  return has ? cf : null;
+}
 
 // Documented column mapping (NFR Data Portability). Header -> target model
 // 's' = student (academic), 'p' = student_personal_details
@@ -60,21 +102,25 @@ exports.exportStudents = async (req, res) => {
   if (req.query.course_id) where.course_id = req.query.course_id;
   if (req.query.semester) where.semester = req.query.semester;
 
-  const students = await Student.findAll({
-    where,
-    include: [
-      { model: StudentPersonalDetails },
-      { model: Course },
-      { model: Admission, include: [{ model: Fee }] },
-    ],
-    order: [['dsn', 'ASC']],
-  });
+  const [students, cfDefs] = await Promise.all([
+    Student.findAll({
+      where,
+      include: [
+        { model: StudentPersonalDetails },
+        { model: Course },
+        { model: Admission, include: [{ model: Fee }] },
+      ],
+      order: [['dsn', 'ASC']],
+    }),
+    loadCustomFieldDefs(),
+  ]);
 
   const rows = students.map((s) => {
     const p = s.student_personal_detail || {};
     const adm = (s.admissions && s.admissions[0]) || {};
     const fee = (adm.fees && adm.fees[0]) || {};
-    return {
+    const cfSource = { student: s.custom_fields, admission: adm.custom_fields, fee: fee.custom_fields };
+    const base = {
       dsn: s.dsn,
       student_name: s.student_name,
       course_id: s.course_id,
@@ -111,6 +157,11 @@ exports.exportStudents = async (req, res) => {
       fee_academic_year: fee.academic_year ?? '',
       fee_receipt_date: fee.receipt_date ?? '',
     };
+    // ----- admin-defined custom fields (one column per active definition) -----
+    for (const d of cfDefs) {
+      base[CF_PREFIX[d.entity] + d.field_key] = readCustom(cfSource[d.entity], d.field_key);
+    }
+    return base;
   });
 
   const ws = XLSX.utils.json_to_sheet(rows);
@@ -209,8 +260,18 @@ exports.importStudents = async (req, res) => {
       // year-wise dsn: honour a dsn_year column if present, else current year
       const year = row.dsn_year ? Number(row.dsn_year) : new Date().getFullYear();
 
-      const admissionData = pickAdmission(row);
-      const feeData = pickFee(row);
+      // Admin-defined custom fields per record (cf_/adm_cf_/fee_cf_ columns).
+      const studentCustom = pickCustom(row, CF_PREFIX.student);
+      const admissionCustom = pickCustom(row, CF_PREFIX.admission);
+      const feeCustom = pickCustom(row, CF_PREFIX.fee);
+      if (studentCustom) academic.custom_fields = studentCustom;
+
+      // A custom value can only be stored on a record that exists, so an
+      // adm_cf_/fee_cf_ column pulls its parent record into being.
+      let admissionData = pickAdmission(row);
+      if (admissionCustom) admissionData = { ...(admissionData || {}), custom_fields: admissionCustom };
+      let feeData = pickFee(row);
+      if (feeCustom) feeData = { ...(feeData || {}), custom_fields: feeCustom };
       // a fee needs an admission to hang off of (FEE ── ADMISSION)
       if (feeData && !admissionData) {
         throw new Error('Fee columns present but no admission data — add adm_* columns for this row');

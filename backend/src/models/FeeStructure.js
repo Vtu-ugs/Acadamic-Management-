@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
+const { customFieldsAttribute } = require('../utils/customFields');
 
 // Fee-structure master — official year-wise fee slabs per program & admission
 // batch. Keyed by (batch_year, program, entry_type, program_year). Fees vary by
@@ -15,6 +16,7 @@ const FeeStructure = sequelize.define('fee_structure', {
   regn_fee:     { type: DataTypes.DECIMAL(10, 2) },               // VTU Registration & other fees
   college_fee:  { type: DataTypes.DECIMAL(10, 2) },               // College Fees (Ref 2)
   total_fee:    { type: DataTypes.DECIMAL(10, 2) },               // Total payable for the year
+  custom_fields: customFieldsAttribute(),                        // admin-defined extra fields
 });
 
 module.exports = FeeStructure;

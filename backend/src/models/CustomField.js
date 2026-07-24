@@ -4,7 +4,7 @@ const sequelize = require('../config/database');
 // Entities an admin may extend with custom fields. Each has a `custom_fields`
 // JSON column; adding one here means adding that column too (see the migration)
 // and an entry in ENTITY_TABLES in customFieldController.
-const CUSTOM_FIELD_ENTITIES = ['student', 'admission', 'fee', 'certificate', 'staff', 'course'];
+const CUSTOM_FIELD_ENTITIES = ['student', 'admission', 'fee', 'fee_structure', 'certificate', 'staff', 'course'];
 const FIELD_TYPES = ['text', 'number', 'date', 'checkbox', 'select'];
 
 // Admin-defined extra field. The definition lives here; the values live in the

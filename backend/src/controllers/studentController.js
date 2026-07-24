@@ -3,7 +3,7 @@ const {
   sequelize, Student, StudentPersonalDetails, Admission, Course, Fee,
 } = require('../models');
 const { generateDsn, withDsnRetry } = require('../utils/dsn');
-const { isPaged, parsePagination } = require('../utils/paginate');
+const { isPaged, parsePagination, UNPAGED_MAX } = require('../utils/paginate');
 
 // FR-S4: list all students across all courses (with optional course/semester filters)
 exports.list = async (req, res) => {
@@ -22,7 +22,9 @@ exports.list = async (req, res) => {
     return res.json({ rows, total: count, page, pageSize });
   }
 
-  const students = await Student.findAll({ where, include, order: [['dsn', 'ASC']] });
+  const students = await Student.findAll({
+    where, include, order: [['dsn', 'ASC']], limit: UNPAGED_MAX, // safety cap
+  });
   res.json(students);
 };
 
@@ -117,7 +119,9 @@ exports.usnPending = async (req, res) => {
     return res.json({ rows, total: count, page, pageSize });
   }
 
-  const students = await Student.findAll({ where, include, order: [['dsn', 'ASC']] });
+  const students = await Student.findAll({
+    where, include, order: [['dsn', 'ASC']], limit: UNPAGED_MAX, // safety cap
+  });
   res.json(students);
 };
 

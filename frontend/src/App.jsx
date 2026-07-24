@@ -4,6 +4,8 @@ import Students from './pages/Students.jsx';
 import UsnPending from './pages/UsnPending.jsx';
 import ImportExport from './pages/ImportExport.jsx';
 import Admissions from './pages/Admissions.jsx';
+import LateralEntry from './pages/LateralEntry.jsx';
+import Loans from './pages/Loans.jsx';
 import Fees from './pages/Fees.jsx';
 import FeeStructures from './pages/FeeStructures.jsx';
 import FeeReports from './pages/FeeReports.jsx';
@@ -13,6 +15,7 @@ import Courses from './pages/Courses.jsx';
 import Staff from './pages/Staff.jsx';
 import Coordinators from './pages/Coordinators.jsx';
 import Diary from './pages/Diary.jsx';
+import DiaryApprovals from './pages/DiaryApprovals.jsx';
 import Users from './pages/Users.jsx';
 import CustomFieldsAdmin from './pages/CustomFieldsAdmin.jsx';
 import ActivityLog from './pages/ActivityLog.jsx';
@@ -25,6 +28,8 @@ const nav = [
   { to: '/', label: 'Dashboard', end: true, element: <Dashboard /> },
   { to: '/students', label: 'Students', element: <Students /> },
   { to: '/admissions', label: 'Admissions', element: <Admissions /> },
+  { to: '/lateral-entry', label: 'Lateral Entry', element: <LateralEntry /> },
+  { to: '/loans', label: 'Loans', element: <Loans /> },
   { to: '/fees', label: 'Fees', element: <Fees /> },
   { to: '/fee-structure', label: 'Fee Structure', element: <FeeStructures /> },
   { to: '/fee-reports', label: 'Fee Reports', element: <FeeReports /> },
@@ -34,6 +39,7 @@ const nav = [
   { to: '/staff', label: 'Staff', element: <Staff /> },
   { to: '/coordinators', label: 'Coordinators', element: <Coordinators /> },
   { to: '/diary', label: 'Weekly Diary', element: <Diary /> },
+  { to: '/diary-approvals', label: 'Diary Approvals', element: <DiaryApprovals /> },
   { to: '/usn-pending', label: 'USN Pending', element: <UsnPending /> },
   { to: '/import-export', label: 'Import / Export', element: <ImportExport /> },
   { to: '/users', label: 'User Management', element: <Users /> },
@@ -44,20 +50,22 @@ const nav = [
 ];
 
 // Which routes each role may see. Mirrors backend middleware/auth.js MODULE_ROLES.
-// `null` for admin = all routes.
-const ROLE_ROUTES = {
+// `null` for admin = all routes. Exported so tests can assert privilege scoping.
+export const ROLE_ROUTES = {
   admin: null,
   admission_staff: [
-    '/', '/students', '/admissions', '/fees', '/fee-structure',
+    '/', '/students', '/admissions', '/lateral-entry', '/loans', '/fees', '/fee-structure',
     '/fee-reports', '/fee-ledger', '/certificates', '/courses',
-    '/usn-pending', '/import-export', '/change-password',
+    '/usn-pending', '/import-export',
   ],
   // Staff users can only work on their own weekly diary — plus their own password.
   staff: ['/diary', '/change-password'],
+  // Chairpersons review and approve staff diaries — plus their own password.
+  chairperson: ['/diary-approvals', '/change-password'],
 };
 
-const HOME_BY_ROLE = { admin: '/', admission_staff: '/admissions', staff: '/diary' };
-const ROLE_LABEL = { admin: 'Admin', admission_staff: 'Admission Staff', staff: 'Staff' };
+const HOME_BY_ROLE = { admin: '/', admission_staff: '/admissions', staff: '/diary', chairperson: '/diary-approvals' };
+const ROLE_LABEL = { admin: 'Admin', admission_staff: 'Admission Staff', staff: 'Staff', chairperson: 'Chairperson' };
 
 export default function App() {
   const { isAuthenticated, user, logout } = useAuth();

@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const { config } = require('../config/env');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
+const JWT_SECRET = config.JWT_SECRET;
 
 // Single source of truth for which roles may reach each API module.
 // The frontend nav/route guard (App.jsx ROLE_ROUTES) mirrors this map.
@@ -8,7 +9,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
 const MODULE_ROLES = {
   staff:          ['admin', 'staff'],
   coordinators:   ['admin', 'staff'],
-  diary:          ['admin', 'staff'],
+  // Diary is shared by staff (author their own), chairpersons (approve), and admins.
+  diary:          ['admin', 'staff', 'chairperson'],
   students:       ['admin', 'admission_staff'],
   admissions:     ['admin', 'admission_staff'],
   fees:           ['admin', 'admission_staff'],

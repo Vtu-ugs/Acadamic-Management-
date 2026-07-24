@@ -30,7 +30,7 @@ exports.stats = async (req, res) => {
   const admYearFilter = year ? 'AND a.academic_year = :ay' : '';
   const admRepl = year ? { ay: year } : {};
 
-  const [courses, studentAgg, catAgg, feeAgg, certRows, dsnYears, admYears] = await Promise.all([
+  const [courses, studentAgg, catAgg, feeAgg, lateralAgg, certRows, dsnYears, admYears] = await Promise.all([
     Course.findAll({ order: [['course_name', 'ASC']], raw: true }),
 
     // Per-course headcount + USN-pending count.
@@ -64,6 +64,15 @@ exports.stats = async (req, res) => {
          FROM fee f
          JOIN admission a ON a.adm_id = f.adm_id
         WHERE f.pending_due > 0 ${admYearFilter}
+        GROUP BY a.course_id`,
+      { replacements: admRepl, type: QueryTypes.SELECT }
+    ),
+
+    // Per-course lateral-entry headcount (scoped to the batch when selected).
+    sequelize.query(
+      `SELECT a.course_id AS course_id, COUNT(*) AS lateral_count
+         FROM admission a
+        WHERE a.entry_type = 'Lateral' ${admYearFilter}
         GROUP BY a.course_id`,
       { replacements: admRepl, type: QueryTypes.SELECT }
     ),
@@ -103,6 +112,7 @@ exports.stats = async (req, res) => {
       total_students: 0,
       total_pending: 0,
       dues_count: 0,
+      lateral_count: 0,
       categories: {},
     });
   }
@@ -119,6 +129,11 @@ exports.stats = async (req, res) => {
   for (const r of catAgg) {
     const b = byCourse.get(r.course_id);
     if (b) b.categories[r.category] = Number(r.cnt) || 0;
+  }
+
+  for (const r of lateralAgg) {
+    const b = byCourse.get(r.course_id);
+    if (b) b.lateral_count = Number(r.lateral_count) || 0;
   }
 
   let totalDue = 0;
@@ -146,4 +161,31 @@ exports.stats = async (req, res) => {
     },
     branches: Array.from(byCourse.values()),
   });
+};
+
+// GET /dashboard/course-students?course_id=1&academic_year=2026-27
+// The roster (name / DSN / USN) for one course, scoped to the selected batch.
+// Loaded on demand when a dashboard branch card is opened, so the main stats
+// payload stays lean.
+exports.courseStudents = async (req, res) => {
+  const courseId = Number(req.query.course_id);
+  if (!Number.isFinite(courseId)) return res.status(400).json({ error: 'course_id is required' });
+
+  const year = req.query.academic_year && req.query.academic_year !== 'all'
+    ? req.query.academic_year
+    : null;
+  const range = year ? dsnRange(year) : null;
+
+  const rows = await sequelize.query(
+    `SELECT s.dsn AS dsn, s.usn AS usn, s.student_name AS student_name, s.semester AS semester
+       FROM student s
+      WHERE s.course_id = :courseId
+      ${range ? 'AND s.dsn BETWEEN :lo AND :hi' : ''}
+      ORDER BY s.student_name ASC`,
+    {
+      replacements: range ? { courseId, lo: range.lo, hi: range.hi } : { courseId },
+      type: QueryTypes.SELECT,
+    }
+  );
+  res.json(rows);
 };

@@ -9,6 +9,7 @@ const ENTITY_TABLES = {
   student: 'student',
   admission: 'admission',
   fee: 'fee',
+  fee_structure: 'fee_structure',
   certificate: 'certificate',
   staff: 'staff',
   course: 'courses',

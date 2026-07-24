@@ -134,7 +134,7 @@ export default function Students() {
   const clearSearch = () => { setQ(''); setSubmittedQ(''); setPage(1); };
 
   useEffect(() => { api.get('/courses').then(setCourses).catch(() => {}); }, []);
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [submittedQ, page]);
+  useEffect(() => { load();   }, [submittedQ, page]);
 
   const courseName = (id) => courses.find((c) => c.course_id === id)?.course_name || id;
 

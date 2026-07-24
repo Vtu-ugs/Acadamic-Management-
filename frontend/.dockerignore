@@ -2,3 +2,7 @@ node_modules
 dist
 .env
 *.md
+tests
+coverage
+.git
+.gitignore

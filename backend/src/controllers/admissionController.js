@@ -26,3 +26,19 @@ exports.search = async (req, res) => {
   });
   res.json(admissions);
 };
+
+// GET /admissions/lateral?academic_year=2026-27
+// Every lateral-entry admission with its student + course, so the frontend can
+// segregate them course-wise. Optionally scoped to one admission batch.
+exports.lateral = async (req, res) => {
+  const where = { entry_type: 'Lateral' };
+  const year = req.query.academic_year;
+  if (year && year !== 'all') where.academic_year = year;
+
+  const admissions = await Admission.findAll({
+    where,
+    include: [{ model: Student, required: true }, { model: Course }],
+    order: [['course_id', 'ASC'], ['dsn', 'ASC']],
+  });
+  res.json(admissions);
+};

@@ -3,7 +3,10 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+# Reproducible install from the committed lockfile. --legacy-peer-deps because
+# some ESLint plugins declare narrow peer ranges; they're dev-only and don't
+# affect the built bundle.
+RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npm run build
 

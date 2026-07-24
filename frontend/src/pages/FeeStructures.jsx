@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useApi } from '../components/useApi.js';
 import Modal from '../components/Modal.jsx';
+import CustomFields from '../components/CustomFields.jsx';
 
 const PROGRAMS = [
   { value: 'BE', label: 'B.E.' },
@@ -19,6 +20,7 @@ const inr = (v) => (v == null || v === '' ? '—' : `₹${Number(v).toLocaleStri
 const blankForm = (batch = '') => ({
   structure_id: null, batch_year: batch, program: 'BE', entry_type: 'Regular',
   program_year: '', tuition_fee: '', regn_fee: '', college_fee: '', total_fee: '',
+  custom_fields: {},
 });
 
 // Fee-structure master, shown as a batch → programs drill-down.
@@ -170,6 +172,8 @@ export default function FeeStructures() {
                   <input type="number" step="0.01" value={form[k] ?? ''}
                     onChange={(e) => setForm({ ...form, [k]: e.target.value })} /></div>
               ))}
+              <CustomFields entity="fee_structure" values={form.custom_fields}
+                onChange={(cf) => setForm({ ...form, custom_fields: cf })} />
             </div>
             {formError && <div className="error">{formError}</div>}
             <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>

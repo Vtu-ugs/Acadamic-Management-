@@ -3,7 +3,7 @@ const PDFDocument = require('pdfkit');
 const {
   Certificate, Admission, Student, StudentPersonalDetails, Course, FeeStructure, Staff,
 } = require('../models');
-const { isPaged, parsePagination } = require('../utils/paginate');
+const { isPaged, parsePagination, UNPAGED_MAX } = require('../utils/paginate');
 
 // Ordinal year of study derived from the current semester (1-2 -> 1st, …).
 const yearOfStudy = (semester) => {
@@ -112,7 +112,9 @@ exports.list = async (req, res) => {
     return res.json({ rows, total: count, page, pageSize });
   }
 
-  const certs = await Certificate.findAll({ where, include, order: [['cert_id', 'DESC']] });
+  const certs = await Certificate.findAll({
+    where, include, order: [['cert_id', 'DESC']], limit: UNPAGED_MAX, // safety cap
+  });
   res.json(certs);
 };
 
@@ -362,7 +364,7 @@ function renderTransferCertificate(doc, ctx) {
     L, R, student, personal, course, dept, cert,
   } = ctx;
 
-  let td = {};
+  let td;
   try { td = cert.tc_details ? JSON.parse(cert.tc_details) : {}; } catch { td = {}; }
 
   // Placeholder shown for a staff field that was left blank.

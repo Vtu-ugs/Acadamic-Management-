@@ -8,6 +8,7 @@ const ENTITIES = [
   { value: 'admission', label: 'Admissions' },
   { value: 'student', label: 'Students' },
   { value: 'fee', label: 'Fees' },
+  { value: 'fee_structure', label: 'Fee Structure' },
   { value: 'certificate', label: 'Certificates' },
   { value: 'staff', label: 'Staff' },
   { value: 'course', label: 'Courses' },
@@ -80,8 +81,8 @@ export default function CustomFieldsAdmin() {
     <div>
       <h2 className="page-title">Custom Fields</h2>
       <p className="page-sub">
-        Add your own fields to the Admissions, Students, Fees, Certificates, Staff and Courses
-        forms without a schema change. Hiding a field removes it from the forms but keeps
+        Add your own fields to the Admissions, Students, Fees, Fee Structure, Certificates, Staff
+        and Courses forms without a schema change. Hiding a field removes it from the forms but keeps
         everything already saved in it; deleting also erases the saved values.
       </p>
 

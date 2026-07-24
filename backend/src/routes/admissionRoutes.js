@@ -11,6 +11,9 @@ const router = express.Router();
 // its `/:id` route.
 router.get('/search', h(admissionController.search));
 
+// Lateral-entry roster (grouped course-wise on the client).
+router.get('/lateral', h(admissionController.lateral));
+
 // Standard list/getOne/create/update/remove (list supports opt-in pagination).
 router.use('/', genericRouter(
   crudFactory(Admission, 'adm_id', [{ model: Student }, { model: Course }])

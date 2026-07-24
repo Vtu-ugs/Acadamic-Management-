@@ -44,6 +44,9 @@ export default function ImportExport() {
           fee_tuition_fee, fee_total_course_fee, fee_pending_due (auto if blank),
           fee_receipt_number (auto if blank), fee_payment_status (auto if blank),
           fee_academic_year, fee_receipt_date.
+          <br /><b>Custom fields:</b> any admin-defined field is exported/imported as its own
+          column — <code>cf_&lt;key&gt;</code> for a student field, <code>adm_cf_&lt;key&gt;</code>
+          for an admission field, and <code>fee_cf_&lt;key&gt;</code> for a fee field.
           <br />Duplicate USN/Aadhar rows are rejected. The export file is a valid import template.
         </p>
         <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files[0])} />

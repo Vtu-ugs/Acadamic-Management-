@@ -2,7 +2,7 @@ const express = require('express');
 const crudFactory = require('../controllers/crudFactory');
 const genericRouter = require('./genericRoutes');
 const {
-  Course, Staff, AcademicCoordinator, WeeklyDiary, FeeStructure,
+  Course, Staff, AcademicCoordinator, FeeStructure,
 } = require('../models');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
@@ -17,6 +17,8 @@ router.use(requireAuth);
 // Role guards per module (admin is included in every set → full access).
 const admission = requireRole('admin', 'admission_staff');
 const staff = requireRole('admin', 'staff');
+// The diary is also reachable by chairpersons, who run the approval workflow.
+const diaryAccess = requireRole('admin', 'staff', 'chairperson');
 
 // Admin-only: manage login accounts (staff / admission staff / other admins).
 router.use('/users', requireRole('admin'), require('./userRoutes'));
@@ -46,6 +48,6 @@ router.use('/coordinators', staff, genericRouter(
   crudFactory(AcademicCoordinator, 'co_id', [{ model: Course }, { model: Staff }])
 ));
 // Diary uses a dedicated controller that scopes staff to their own entries.
-router.use('/diary', staff, require('./diaryRoutes'));
+router.use('/diary', diaryAccess, require('./diaryRoutes'));
 
 module.exports = router;

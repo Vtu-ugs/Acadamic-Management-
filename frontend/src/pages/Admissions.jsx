@@ -184,12 +184,8 @@ export default function Admissions() {
                   <option value="">— select —</option>
                   {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select></div>
-              <div className="field"><label>Loan Provider</label>
-                <input value={form.loan_provider_name} onChange={(e) => setForm({ ...form, loan_provider_name: e.target.value })} /></div>
 
-              <div className="field"><label>Available Loan</label>
-                <input type="number" step="0.01" value={form.available_loan}
-                  onChange={(e) => setForm({ ...form, available_loan: e.target.value })} /></div>
+              {/* Loan details are managed on the dedicated Loans page, not here. */}
               <div className="field"><label>Outside Country</label>
                 <input type="checkbox" checked={form.outside_country}
                   onChange={(e) => setForm({ ...form, outside_country: e.target.checked })} /></div>

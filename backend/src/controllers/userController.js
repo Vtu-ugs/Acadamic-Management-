@@ -2,7 +2,14 @@ const bcrypt = require('bcryptjs');
 const { AppUser, Staff } = require('../models');
 const { validatePassword } = require('../utils/passwordPolicy');
 
-const ROLES = ['admin', 'admission_staff', 'staff'];
+const ROLES = ['admin', 'admission_staff', 'staff', 'chairperson'];
+
+// There is a single chairperson overseeing every course. Returns true if a
+// chairperson account (other than excludeUserId) already exists.
+async function chairpersonExists(excludeUserId = null) {
+  const existing = await AppUser.findOne({ where: { role: 'chairperson' } });
+  return !!existing && existing.user_id !== excludeUserId;
+}
 
 // Every login must have a unique password. bcrypt salts each hash, so identical
 // passwords produce different hashes — we compare the new password against every
@@ -37,6 +44,9 @@ async function create(req, res) {
     return res.status(400).json({ error: 'Username, password and role are required' });
   }
   if (!ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  if (role === 'chairperson' && await chairpersonExists()) {
+    return res.status(409).json({ error: 'A chairperson already exists — there can only be one' });
+  }
   const weak = validatePassword(password);
   if (weak) return res.status(400).json({ error: weak });
 
@@ -68,6 +78,11 @@ async function update(req, res) {
 
   const { role, full_name, is_active, password, staff_id } = req.body || {};
 
+  const effectiveRole = role !== undefined ? role : user.role;
+  if (effectiveRole === 'chairperson' && await chairpersonExists(user.user_id)) {
+    return res.status(409).json({ error: 'A chairperson already exists — there can only be one' });
+  }
+
   if (role !== undefined) {
     if (!ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
     // Don't let the last active admin lose admin rights and lock everyone out.
@@ -79,7 +94,6 @@ async function update(req, res) {
   if (full_name !== undefined) user.full_name = full_name || null;
   // Keep the staff link only for staff logins; clear it for other roles.
   if (staff_id !== undefined || role !== undefined) {
-    const effectiveRole = role !== undefined ? role : user.role;
     user.staff_id = effectiveRole === 'staff' && staff_id ? Number(staff_id) : null;
   }
   if (is_active !== undefined) {

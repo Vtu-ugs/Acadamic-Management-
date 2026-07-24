@@ -12,7 +12,6 @@ async function logActivity(who, action, detail) {
       detail: detail ? String(detail).slice(0, 255) : null,
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('activity log failed:', err.message);
   }
 }

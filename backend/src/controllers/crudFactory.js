@@ -1,4 +1,4 @@
-const { isPaged, parsePagination } = require('../utils/paginate');
+const { isPaged, parsePagination, UNPAGED_MAX } = require('../utils/paginate');
 
 // Generic CRUD controller factory for straightforward entities.
 // `pk` is the primary-key column name; `include` is optional eager-load config.
@@ -20,7 +20,9 @@ module.exports = function crudFactory(Model, pk, include = []) {
         });
         return res.json({ rows, total: count, page, pageSize });
       }
-      const rows = await Model.findAll({ where, include });
+      // Un-paginated callers get a plain array, but capped so it can never
+      // return the whole table (use ?page= for more).
+      const rows = await Model.findAll({ where, include, limit: UNPAGED_MAX });
       res.json(rows);
     },
 

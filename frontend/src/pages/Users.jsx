@@ -7,6 +7,7 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
   { value: 'admission_staff', label: 'Admission Staff' },
   { value: 'staff', label: 'Staff' },
+  { value: 'chairperson', label: 'Chairperson' },
 ];
 const ROLE_LABEL = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]));
 
@@ -27,13 +28,16 @@ export default function Users() {
   const save = async (e) => {
     e.preventDefault();
     setFormError(null);
+    // A chairperson account defaults to the display name "Chairperson" if none is given.
+    const fullName = editing.full_name?.trim()
+      || (editing.role === 'chairperson' ? 'Chairperson' : editing.full_name);
     try {
       if (isNew) {
         await api.post('/users', {
           username: editing.username,
           password: editing.password,
           role: editing.role,
-          full_name: editing.full_name,
+          full_name: fullName,
           is_active: editing.is_active,
           staff_id: editing.role === 'staff' ? editing.staff_id || null : null,
         });
@@ -41,7 +45,7 @@ export default function Users() {
         // Only send password if the admin typed a new one (reset).
         const payload = {
           role: editing.role,
-          full_name: editing.full_name,
+          full_name: fullName,
           is_active: editing.is_active,
           staff_id: editing.role === 'staff' ? editing.staff_id || null : null,
         };
@@ -77,12 +81,12 @@ export default function Users() {
         {loading ? <p className="muted">Loading…</p> : (
           <table>
             <thead>
-              <tr><th>ID</th><th>Username</th><th>Full name</th><th>Role</th><th>Linked staff</th><th>Status</th><th>Last login</th><th>Actions</th></tr>
+              <tr><th>Sl. No.</th><th>Username</th><th>Full name</th><th>Role</th><th>Linked staff</th><th>Status</th><th>Last login</th><th>Actions</th></tr>
             </thead>
             <tbody>
-              {(data || []).map((u) => (
+              {(data || []).map((u, i) => (
                 <tr key={u.user_id}>
-                  <td>{u.user_id}</td>
+                  <td>{i + 1}</td>
                   <td>{u.username}</td>
                   <td>{u.full_name || <span className="muted">—</span>}</td>
                   <td>{ROLE_LABEL[u.role] || u.role}</td>
@@ -138,6 +142,11 @@ export default function Users() {
                     ))}
                   </select>
                   <span className="muted">This login can only view/edit this staff member's diary.</span>
+                </div>
+              )}
+              {editing.role === 'chairperson' && (
+                <div className="field">
+                  <span className="muted">A single chairperson approves the weekly diaries of all staff, across every course.</span>
                 </div>
               )}
               <div className="field">

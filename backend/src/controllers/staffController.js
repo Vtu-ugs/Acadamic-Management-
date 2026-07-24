@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { Staff, Course, AppUser } = require('../models');
+const { UNPAGED_MAX } = require('../utils/paginate');
 const { validatePassword } = require('../utils/passwordPolicy');
 const { passwordInUse } = require('./userController');
 
@@ -52,7 +53,7 @@ async function list(req, res) {
   for (const key of Object.keys(req.query)) {
     if (Staff.rawAttributes[key]) where[key] = req.query[key];
   }
-  const rows = await Staff.findAll({ where, include });
+  const rows = await Staff.findAll({ where, include, limit: UNPAGED_MAX }); // safety cap
   res.json(rows.map(shape));
 }
 

@@ -8,6 +8,10 @@
 #   docker compose down               # stop (database volume kept)
 #   docker compose down -v            # stop AND wipe the database
 #
+# SECRETS: values below read from a git-ignored `.env` in this folder (copy
+# `.env.example` → `.env`). The `:-default` fallbacks are DEV ONLY so the stack
+# runs out of the box; set real secrets in `.env` before hosting (see SECURITY.md).
+#
 # FIRST-RUN DATABASE: on an empty volume, MySQL auto-runs every *.sql in
 # database/docker-init/. Put your data there first (one-time):
 #   "C:\xampp\mysql\bin\mysqldump.exe" -u root office_management > database/docker-init/01-data.sql
@@ -19,15 +23,17 @@ services:
     container_name: ams-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: office_dev_pw       # local/dev — change for real hosting
-      MYSQL_DATABASE: office_management
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-office_dev_pw}
+      MYSQL_DATABASE: ${DB_NAME:-office_management}
     ports:
-      - "3306:3306"                            # stop XAMPP MySQL first, or use "3307:3306"
+      # Bound to localhost only — the DB is not reachable from other machines.
+      # Other services reach it over the internal compose network as `db:3306`.
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./database/docker-init:/docker-entrypoint-initdb.d:ro   # auto-loaded on first init
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-poffice_dev_pw"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-office_dev_pw}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -40,14 +46,17 @@ services:
       db:
         condition: service_healthy             # wait until MySQL is ready
     environment:
+      NODE_ENV: production
       PORT: 4000
       DB_HOST: db                              # the compose service name
       DB_PORT: 3306
-      DB_NAME: office_management
-      DB_USER: root
-      DB_PASSWORD: office_dev_pw
-      JWT_SECRET: change-me-to-a-long-random-string
-      CORS_ORIGIN: http://localhost:8080
+      DB_NAME: ${DB_NAME:-office_management}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-office_dev_pw}
+      # Dev default is long enough to pass the production start-up guard, but is
+      # NOT secret (it's in the repo). Override in `.env` for any real deployment.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-in-dotenv-3b8f2a}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
     ports:
       - "4000:4000"
 

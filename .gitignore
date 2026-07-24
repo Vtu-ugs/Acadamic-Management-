@@ -21,6 +21,10 @@ storage/
 # Docker DB seed dumps (may contain real data / password hashes)
 database/docker-init/*.sql
 ams_backup.sql
+database/full-dump-backup.sql
+
+# Live backups from scripts/backup.ps1 - contain real student data
+backups/
 
 # OS / editor junk
 .DS_Store

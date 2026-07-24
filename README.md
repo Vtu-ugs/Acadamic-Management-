@@ -22,7 +22,7 @@ M.C.A. – 1–4 semesters) with no schema change when onboarding a new course.
 management/
 ├── database/
 │   ├── schema.sql        # Tables, FK/UK/CHECK constraints (PRD §5)
-│   └── seed.sql          # Sample courses, staff, students, fees…
+│   └── seed.sql          # Baseline courses + fee slabs (no student data)
 ├── backend/
 │   ├── src/
 │   │   ├── config/database.js
@@ -49,7 +49,7 @@ management/
 
 ```bash
 mysql -u root -p < database/schema.sql
-mysql -u root -p < database/seed.sql      # optional sample data
+mysql -u root -p < database/seed.sql      # baseline courses + fee slabs
 ```
 
 ### Run the whole app with Docker (one command)

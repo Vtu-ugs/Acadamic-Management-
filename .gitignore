@@ -26,6 +26,10 @@ database/full-dump-backup.sql
 # Live backups from scripts/backup.ps1 - contain real student data
 backups/
 
+# TLS certificates — the private key must NEVER be committed. Generated
+# per-server by scripts/generate-cert.ps1.
+certs/
+
 # OS / editor junk
 .DS_Store
 Thumbs.db

@@ -11,9 +11,12 @@
          NODE_ENV=production
          DB_PASSWORD=<long random password>
          JWT_SECRET=<openssl rand -hex 32>
-         CORS_ORIGIN=http://<this-server's-LAN-IP>:8080
-    4. Open the firewall (PowerShell as Administrator):
-         New-NetFirewallRule -DisplayName "AMS App" -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow
+         CORS_ORIGIN=https://<this-server's-LAN-IP>
+    4. Generate the HTTPS certificate (once):
+         .\scripts\generate-cert.ps1
+    5. Open the firewall (PowerShell as Administrator):
+         New-NetFirewallRule -DisplayName "AMS HTTPS" -Direction Inbound -LocalPort 443 -Protocol TCP -Action Allow
+         New-NetFirewallRule -DisplayName "AMS HTTP redirect" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow
 
   USAGE (from the project root, on the server PC):
     .\scripts\deploy.ps1                 # git pull + build + start
@@ -38,6 +41,9 @@ if (-not (Test-Path (Join-Path $projectRoot '.env'))) {
 }
 docker version *> $null
 if ($LASTEXITCODE -ne 0) { throw "Docker isn't running. Start Docker Desktop and try again." }
+if (-not (Test-Path (Join-Path $projectRoot 'certs\server.crt'))) {
+    throw "TLS certificate is missing. Run .\scripts\generate-cert.ps1 first (needed for HTTPS)."
+}
 
 # --- Pull latest code ------------------------------------------------------
 if (-not $NoPull) {
@@ -72,9 +78,10 @@ $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
        Select-Object -First 1).IPAddress
 Write-Host "`nDeployed." -ForegroundColor Green
 if ($ip) {
-    Write-Host "Open on this PC:      http://localhost:8080" -ForegroundColor Green
-    Write-Host "Open from other PCs:  http://$ip:8080" -ForegroundColor Green
+    Write-Host "Open on this PC:      https://localhost" -ForegroundColor Green
+    Write-Host "Open from other PCs:  https://$ip" -ForegroundColor Green
+    Write-Host "(Self-signed cert: browsers show a one-time warning -> Advanced -> Proceed.)" -ForegroundColor Yellow
     Write-Host "(Make sure CORS_ORIGIN in .env matches the address people actually use.)" -ForegroundColor Yellow
 } else {
-    Write-Host "Open: http://localhost:8080  (couldn't auto-detect LAN IP; run 'ipconfig')" -ForegroundColor Green
+    Write-Host "Open: https://localhost  (couldn't auto-detect LAN IP; run 'ipconfig')" -ForegroundColor Green
 }

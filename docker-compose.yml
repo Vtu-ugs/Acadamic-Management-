@@ -1,7 +1,8 @@
 # Full-stack Academic Management System — the whole app in one command.
 #
 #   docker compose up -d --build      # build + start db, backend, frontend
-#   open  http://localhost:8080       # the app (API is proxied under /api)
+#   open  https://localhost           # the app (API is proxied under /api)
+#   (Run scripts/generate-cert.ps1 once first to create the TLS certificate.)
 #
 #   docker compose ps                 # check health
 #   docker compose logs -f backend    # tail backend logs
@@ -56,7 +57,7 @@ services:
       # Dev default is long enough to pass the production start-up guard, but is
       # NOT secret (it's in the repo). Override in `.env` for any real deployment.
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-in-dotenv-3b8f2a}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://localhost}
     ports:
       - "4000:4000"
 
@@ -68,7 +69,12 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "8080:80"
+      - "80:80"       # HTTP — redirects to HTTPS
+      - "443:443"     # HTTPS — the app. Open https://<server-ip>
+    volumes:
+      # TLS cert + key, generated per-server by scripts/generate-cert.ps1.
+      # Mounted read-only; never baked into the image or committed to git.
+      - ./certs:/etc/nginx/certs:ro
 
 volumes:
   mysql_data:

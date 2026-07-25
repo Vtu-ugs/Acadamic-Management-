@@ -26,8 +26,11 @@ Two PowerShell scripts to host this app on a **server PC** on your LAN.
 ```powershell
 git clone <your-repo-url>
 cd "acadamic management system"
-Copy-Item .env.example .env          # then edit .env: set NODE_ENV=production, DB_PASSWORD, JWT_SECRET, CORS_ORIGIN
-# Firewall (Admin PowerShell): New-NetFirewallRule -DisplayName "AMS App" -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow
+Copy-Item .env.example .env          # then edit .env: set NODE_ENV=production, DB_PASSWORD, JWT_SECRET, CORS_ORIGIN=https://<server-ip>
+.\scripts\generate-cert.ps1          # one-time: create the HTTPS (TLS) certificate
+# Firewall (Admin PowerShell):
+#   New-NetFirewallRule -DisplayName "AMS HTTPS" -Direction Inbound -LocalPort 443 -Protocol TCP -Action Allow
+#   New-NetFirewallRule -DisplayName "AMS HTTP redirect" -Direction Inbound -LocalPort 80 -Protocol TCP -Action Allow
 .\scripts\deploy.ps1 -FreshData      # -FreshData loads 01-data.sql into an empty DB
 ```
 

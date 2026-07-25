@@ -75,8 +75,10 @@ docker compose up -d --build     # build + start everything
 docker compose ps                # wait until all services are healthy
 ```
 
-Open **http://localhost:8080** — the frontend serves the app and proxies `/api`
-to the backend. Useful commands:
+Open **https://localhost** — the frontend serves the app over HTTPS and proxies
+`/api` to the backend. (Generate the TLS certificate once first with
+`.\scripts\generate-cert.ps1`; self-signed certs show a one-time browser warning
+you can safely accept on a LAN.) Useful commands:
 
 ```bash
 docker compose logs -f backend   # tail API logs

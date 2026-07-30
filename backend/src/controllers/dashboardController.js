@@ -1,4 +1,5 @@
 const { QueryTypes } = require('sequelize');
+const PDFDocument = require('pdfkit');
 const { sequelize, Course } = require('../models');
 const { batchYearFromDsn } = require('../utils/dsn');
 
@@ -30,7 +31,7 @@ exports.stats = async (req, res) => {
   const admYearFilter = year ? 'AND a.academic_year = :ay' : '';
   const admRepl = year ? { ay: year } : {};
 
-  const [courses, studentAgg, catAgg, feeAgg, lateralAgg, certRows, dsnYears, admYears] = await Promise.all([
+  const [courses, studentAgg, catAgg, genderAgg, feeAgg, lateralAgg, certRows, dsnYears, admYears] = await Promise.all([
     Course.findAll({ order: [['course_name', 'ASC']], raw: true }),
 
     // Per-course headcount + USN-pending count.
@@ -53,6 +54,17 @@ exports.stats = async (req, res) => {
          LEFT JOIN student_personal_details p ON p.dsn = s.dsn
          ${studentWhere}
         GROUP BY s.course_id, category`,
+      { replacements: studentRepl, type: QueryTypes.SELECT }
+    ),
+
+    // Per-course gender split. Grouped on the raw value and normalised in JS,
+    // since the column is free text ("Male" / "M" / "female" all occur).
+    sequelize.query(
+      `SELECT s.course_id AS course_id, p.gender AS gender, COUNT(*) AS cnt
+         FROM student s
+         LEFT JOIN student_personal_details p ON p.dsn = s.dsn
+         ${studentWhere}
+        GROUP BY s.course_id, p.gender`,
       { replacements: studentRepl, type: QueryTypes.SELECT }
     ),
 
@@ -113,6 +125,9 @@ exports.stats = async (req, res) => {
       total_pending: 0,
       dues_count: 0,
       lateral_count: 0,
+      male_count: 0,
+      female_count: 0,
+      other_count: 0,
       categories: {},
     });
   }
@@ -129,6 +144,16 @@ exports.stats = async (req, res) => {
   for (const r of catAgg) {
     const b = byCourse.get(r.course_id);
     if (b) b.categories[r.category] = Number(r.cnt) || 0;
+  }
+
+  for (const r of genderAgg) {
+    const b = byCourse.get(r.course_id);
+    if (!b) continue;
+    const g = String(r.gender || '').trim().toLowerCase();
+    const n = Number(r.cnt) || 0;
+    if (g.startsWith('m')) b.male_count += n;
+    else if (g.startsWith('f')) b.female_count += n;
+    else b.other_count += n; // "Other" and students with no personal details yet
   }
 
   for (const r of lateralAgg) {
@@ -163,6 +188,11 @@ exports.stats = async (req, res) => {
   });
 };
 
+// Roster order: USN ascending, with USN-pending students last (by name).
+// USNs are allotted by the university in a fixed sequence, so this is the order
+// the office expects on any printed list.
+const ROSTER_ORDER = `ORDER BY (s.usn IS NULL OR s.usn = '') ASC, s.usn ASC, s.student_name ASC`;
+
 // GET /dashboard/course-students?course_id=1&academic_year=2026-27
 // The roster (name / DSN / USN) for one course, scoped to the selected batch.
 // Loaded on demand when a dashboard branch card is opened, so the main stats
@@ -181,11 +211,109 @@ exports.courseStudents = async (req, res) => {
        FROM student s
       WHERE s.course_id = :courseId
       ${range ? 'AND s.dsn BETWEEN :lo AND :hi' : ''}
-      ORDER BY s.student_name ASC`,
+      ${ROSTER_ORDER}`,
     {
       replacements: range ? { courseId, lo: range.lo, hi: range.hi } : { courseId },
       type: QueryTypes.SELECT,
     }
   );
   res.json(rows);
+};
+
+// GET /dashboard/usn-list.pdf?course_id=1|all&academic_year=2026-27
+// A printable USN + student-name list, grouped branch-wise and ordered by USN.
+// `course_id=all` prints every branch that has students, one branch per page.
+exports.usnListPdf = async (req, res) => {
+  const rawCourse = req.query.course_id;
+  const allCourses = !rawCourse || rawCourse === 'all';
+  const courseId = allCourses ? null : Number(rawCourse);
+  if (!allCourses && !Number.isFinite(courseId)) {
+    return res.status(400).json({ error: 'course_id must be a number or "all"' });
+  }
+
+  const year = req.query.academic_year && req.query.academic_year !== 'all'
+    ? req.query.academic_year
+    : null;
+  const range = year ? dsnRange(year) : null;
+
+  const where = ['1 = 1'];
+  const repl = {};
+  if (!allCourses) { where.push('s.course_id = :courseId'); repl.courseId = courseId; }
+  if (range) { where.push('s.dsn BETWEEN :lo AND :hi'); repl.lo = range.lo; repl.hi = range.hi; }
+
+  const rows = await sequelize.query(
+    `SELECT c.course_id AS course_id, c.course_name AS course_name,
+            s.dsn AS dsn, s.usn AS usn, s.student_name AS student_name
+       FROM student s
+       JOIN courses c ON c.course_id = s.course_id
+      WHERE ${where.join(' AND ')}
+      ${ROSTER_ORDER.replace('ORDER BY', 'ORDER BY c.course_name ASC,')}`,
+    { replacements: repl, type: QueryTypes.SELECT }
+  );
+
+  // Group into branches, preserving the SQL ordering.
+  const groups = [];
+  for (const r of rows) {
+    let g = groups[groups.length - 1];
+    if (!g || g.course_id !== r.course_id) {
+      g = { course_id: r.course_id, course_name: r.course_name, students: [] };
+      groups.push(g);
+    }
+    g.students.push(r);
+  }
+
+  const scope = year ? `${year} admission batch` : 'All batches';
+  const fileName = allCourses ? 'usn-list-all-branches.pdf' : `usn-list-${courseId}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  doc.pipe(res);
+
+  if (groups.length === 0) {
+    doc.fontSize(14).text('USN List', { align: 'center' });
+    doc.moveDown().fontSize(11).text(`No students found for ${scope}.`, { align: 'center' });
+    return doc.end();
+  }
+
+  const L = doc.page.margins.left;
+  const R = doc.page.width - doc.page.margins.right;
+  // Sl. No. | USN | Student Name — the three columns the office prints.
+  const COLS = [{ w: 50 }, { w: 130 }, { w: R - L - 180 }];
+  const X = [L, L + COLS[0].w, L + COLS[0].w + COLS[1].w];
+
+  const headerRow = (y) => {
+    doc.font('Helvetica-Bold').fontSize(10);
+    doc.text('Sl. No.', X[0], y, { width: COLS[0].w });
+    doc.text('USN', X[1], y, { width: COLS[1].w });
+    doc.text('Student Name', X[2], y, { width: COLS[2].w });
+    doc.moveTo(L, y + 14).lineTo(R, y + 14).stroke();
+    return y + 20;
+  };
+
+  groups.forEach((g, gi) => {
+    if (gi > 0) doc.addPage();
+    doc.font('Helvetica-Bold').fontSize(14).text('USN List', L, doc.y, { align: 'center' });
+    doc.font('Helvetica').fontSize(11).text(g.course_name, { align: 'center' });
+    doc.fontSize(9).text(`${scope}  •  ${g.students.length} student(s)`, { align: 'center' });
+    doc.moveDown(1);
+
+    let y = headerRow(doc.y);
+    doc.font('Helvetica').fontSize(10);
+
+    g.students.forEach((s, i) => {
+      // Start a new page before running off the bottom, repeating the header.
+      if (y > doc.page.height - doc.page.margins.bottom - 30) {
+        doc.addPage();
+        y = headerRow(doc.page.margins.top);
+        doc.font('Helvetica').fontSize(10);
+      }
+      doc.text(String(i + 1), X[0], y, { width: COLS[0].w });
+      doc.text(s.usn || 'USN pending', X[1], y, { width: COLS[1].w });
+      doc.text(s.student_name || '-', X[2], y, { width: COLS[2].w });
+      y += 18;
+    });
+  });
+
+  doc.end();
 };

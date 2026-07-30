@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 
 // Landing page per role after a successful login.
@@ -7,11 +7,13 @@ const HOME_BY_ROLE = {
   admin: '/',
   admission_staff: '/admissions',
   staff: '/diary',
+  chairperson: '/diary-approvals',
 };
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -32,7 +34,14 @@ export default function Login() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Login failed');
       login(data.token, data.user);
-      navigate(HOME_BY_ROLE[data.user.role] || '/', { replace: true });
+      // Return to the deep link that bounced us here (App stores it as
+      // state.from), otherwise land on the role's home page. A path the role
+      // may not open is harmless: App's catch-all route redirects it home.
+      const from = location.state?.from;
+      const back = from && from.pathname !== '/login'
+        ? `${from.pathname}${from.search || ''}`
+        : null;
+      navigate(back || HOME_BY_ROLE[data.user.role] || '/', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

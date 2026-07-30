@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api';
+import { api, fileUrl } from '../api';
 import Modal from '../components/Modal';
 
 export default function Dashboard() {
@@ -59,18 +59,34 @@ export default function Dashboard() {
 
       {data && (
         <>
-          <h3 className="section-title">Branch-wise Statistics <span className="muted">({scopeLabel})</span></h3>
+          <div className="section-head">
+            <h3 className="section-title">Branch-wise Statistics <span className="muted">({scopeLabel})</span></h3>
+            <a
+              href={fileUrl(`/dashboard/usn-list.pdf?course_id=all&academic_year=${encodeURIComponent(year)}`)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <button type="button" className="secondary">Print USN list (all branches)</button>
+            </a>
+          </div>
           <p className="page-sub">Click a branch to see its students (name / DSN / USN) and caste-wise details.</p>
           {branches.length === 0 ? (
             <p className="muted">No branches to show.</p>
           ) : (
             <div className="branch-grid">
               {branches.map((b) => (
-                <button
-                  type="button"
+                // A div (not a <button>) so the Print link can live inside it —
+                // nested interactive elements are invalid HTML. Keyboard access
+                // is preserved with role/tabIndex + Enter/Space.
+                <div
+                  role="button"
+                  tabIndex={0}
                   className="branch-card"
                   key={b.course_id}
                   onClick={() => setSelected(b)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(b); }
+                  }}
                 >
                   <div className="branch-name">{b.course_name}</div>
                   <div className="branch-figures">
@@ -89,7 +105,33 @@ export default function Dashboard() {
                       <div className="fig-lbl">With Dues</div>
                     </div>
                   </div>
-                </button>
+                  <div className="branch-figures branch-gender">
+                    <div className="fig">
+                      <div className="fig-num">{b.male_count || 0}</div>
+                      <div className="fig-lbl">Male</div>
+                    </div>
+                    <div className="fig">
+                      <div className="fig-num">{b.female_count || 0}</div>
+                      <div className="fig-lbl">Female</div>
+                    </div>
+                    <div className="fig">
+                      <div className="fig-num">{b.other_count || 0}</div>
+                      <div className="fig-lbl">Other / N.A.</div>
+                    </div>
+                  </div>
+                  <div className="branch-actions">
+                    <a
+                      href={fileUrl(`/dashboard/usn-list.pdf?course_id=${b.course_id}&academic_year=${encodeURIComponent(year)}`)}
+                      target="_blank"
+                      rel="noreferrer"
+                      // Stop the click bubbling to the card, which would also
+                      // open the branch popup behind the new tab.
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Print USN list
+                    </a>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -145,7 +187,16 @@ function BranchDetail({ branch, year, scopeLabel, onClose }) {
         </div>
       </div>
 
-      <div className="caste-title">Students</div>
+      <div className="section-head">
+        <div className="caste-title">Students <span className="muted">(in USN order)</span></div>
+        <a
+          href={fileUrl(`/dashboard/usn-list.pdf?course_id=${branch.course_id}&academic_year=${encodeURIComponent(year)}`)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <button type="button" className="secondary">Print USN list</button>
+        </a>
+      </div>
       {rosterError ? (
         <div className="error">{rosterError}</div>
       ) : students === null ? (

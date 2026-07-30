@@ -133,12 +133,23 @@ button.link.danger { background: none; color: var(--danger); }
 
 /* ---- Branch-wise statistics ---- */
 .section-title { margin: 26px 0 12px; font-size: 16px; font-weight: 700; color: var(--text); }
+/* Section heading with an action (e.g. a print button) pushed to the right. */
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.section-head .section-title { margin-bottom: 0; }
 .branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .branch-card { display: block; width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; transition: border-color .12s, box-shadow .12s; }
 .branch-card:hover { background: var(--panel); }
 .branch-card:hover { border-color: var(--primary-light); box-shadow: 0 2px 8px rgba(46,109,164,.12); }
 .branch-name { font-size: 15px; font-weight: 700; color: var(--primary); padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
 .branch-figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* The card is a div with role="button", so restore a visible focus ring. */
+.branch-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.branch-gender { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+/* Per-branch print link, pinned to the bottom of the card. */
+.branch-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); text-align: right; }
+.branch-actions a { font-size: 12px; font-weight: 600; color: var(--primary); text-decoration: none; }
+.branch-actions a:hover { text-decoration: underline; }
+.branch-gender .fig-num { font-size: 15px; }
 .fig { text-align: center; }
 .fig-num { font-size: 18px; font-weight: 700; color: var(--text); }
 .fig-lbl { color: var(--muted); font-size: 11px; margin-top: 3px; }

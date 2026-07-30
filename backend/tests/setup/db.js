@@ -11,6 +11,17 @@
 const mysql = require('mysql2/promise');
 
 const TEST_DB = process.env.DB_NAME || 'office_management_test';
+
+// SAFETY RAIL: this harness DROPs the schema it is pointed at. A DB_NAME left
+// over in the shell (e.g. copied from a running deployment) would therefore
+// destroy live data, so refuse anything that isn't clearly a throwaway schema.
+if (!/(^|_)test(_|$)/.test(TEST_DB)) {
+  throw new Error(
+    `Refusing to run tests against DB_NAME="${TEST_DB}": the test harness drops this ` +
+    'database. Use a name containing "test" (default: office_management_test), or unset DB_NAME.'
+  );
+}
+
 process.env.DB_NAME = TEST_DB;
 process.env.NODE_ENV = 'test';
 

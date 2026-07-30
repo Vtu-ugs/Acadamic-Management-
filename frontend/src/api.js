@@ -9,10 +9,18 @@ function authHeader() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// Where Login looks for the page to return to after a re-login. Stashed in
+// sessionStorage rather than router state because the bounce below is a full
+// page load, which discards anything held in memory.
+export const RETURN_TO_KEY = 'ams_return_to';
+
 // Clear the session and bounce to login on an expired/invalid token.
 function handleUnauthorized() {
   localStorage.removeItem('ams_auth');
-  if (window.location.pathname !== '/login') window.location.assign('/login');
+  const { pathname, search, hash } = window.location;
+  if (pathname === '/login') return;
+  sessionStorage.setItem(RETURN_TO_KEY, `${pathname}${search}${hash}`);
+  window.location.assign('/login');
 }
 
 async function request(path, options = {}) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_ROUTES } from '../src/App.jsx';
+import { ROLE_ROUTES, HOME_BY_ROLE } from '../src/roles.js';
 
 // These guard against accidental privilege creep in the nav/route allow-lists.
 // They mirror the backend's middleware/auth.js MODULE_ROLES intent.
@@ -32,6 +32,22 @@ describe('ROLE_ROUTES privilege scoping', () => {
   it('never exposes authoring/admin diary routes to chairpersons', () => {
     for (const route of ['/diary', '/users', '/staff', '/students']) {
       expect(ROLE_ROUTES.chairperson).not.toContain(route);
+    }
+  });
+
+  // Guards the drift that having two copies of these maps used to invite: a
+  // landing page the role is not actually allowed to open would bounce the user
+  // straight back out via App's catch-all route.
+  it('gives every role a landing page it is allowed to open', () => {
+    for (const [role, home] of Object.entries(HOME_BY_ROLE)) {
+      const allowed = ROLE_ROUTES[role];
+      if (allowed !== null) expect(allowed, `${role} home ${home}`).toContain(home);
+    }
+  });
+
+  it('defines a landing page for every role that has an allowlist', () => {
+    for (const role of Object.keys(ROLE_ROUTES)) {
+      expect(HOME_BY_ROLE[role], `missing home for ${role}`).toBeTruthy();
     }
   });
 });

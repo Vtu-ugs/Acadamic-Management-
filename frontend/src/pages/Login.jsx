@@ -1,14 +1,25 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { RETURN_TO_KEY } from '../api';
+import { HOME_BY_ROLE } from '../roles.js';
 
-// Landing page per role after a successful login.
-const HOME_BY_ROLE = {
-  admin: '/',
-  admission_staff: '/admissions',
-  staff: '/diary',
-  chairperson: '/diary-approvals',
-};
+// The page to return to after signing in, or null to use the role's home.
+// Two ways we can have been bounced here:
+//   - App redirected an unauthenticated in-app navigation, passing router state
+//   - the token expired mid-session, and api.js stashed the path before a
+//     full page reload wiped that state
+// A path the role may not open is harmless: App's catch-all redirects it home.
+export function returnPath(routerState) {
+  const stashed = sessionStorage.getItem(RETURN_TO_KEY);
+  sessionStorage.removeItem(RETURN_TO_KEY); // one-shot, so it can't stick
+  const from = routerState?.from;
+  const fromRouter = from && from.pathname !== '/login'
+    ? `${from.pathname}${from.search || ''}${from.hash || ''}`
+    : null;
+  const candidate = fromRouter || stashed;
+  return candidate && !candidate.startsWith('/login') ? candidate : null;
+}
 
 export default function Login() {
   const { login } = useAuth();
@@ -34,13 +45,7 @@ export default function Login() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Login failed');
       login(data.token, data.user);
-      // Return to the deep link that bounced us here (App stores it as
-      // state.from), otherwise land on the role's home page. A path the role
-      // may not open is harmless: App's catch-all route redirects it home.
-      const from = location.state?.from;
-      const back = from && from.pathname !== '/login'
-        ? `${from.pathname}${from.search || ''}`
-        : null;
+      const back = returnPath(location.state);
       navigate(back || HOME_BY_ROLE[data.user.role] || '/', { replace: true });
     } catch (err) {
       setError(err.message);

@@ -22,6 +22,7 @@ import ActivityLog from './pages/ActivityLog.jsx';
 import ChangePassword from './pages/ChangePassword.jsx';
 import Login from './pages/Login.jsx';
 import { useAuth } from './auth.jsx';
+import { ROLE_ROUTES, HOME_BY_ROLE, ROLE_LABEL } from './roles.js';
 
 // Every nav item, with the element it routes to.
 const nav = [
@@ -48,24 +49,6 @@ const nav = [
   { to: '/activity', label: 'Activity Log', element: <ActivityLog /> },
   { to: '/change-password', label: 'Change Password', element: <ChangePassword /> },
 ];
-
-// Which routes each role may see. Mirrors backend middleware/auth.js MODULE_ROLES.
-// `null` for admin = all routes. Exported so tests can assert privilege scoping.
-export const ROLE_ROUTES = {
-  admin: null,
-  admission_staff: [
-    '/', '/students', '/admissions', '/lateral-entry', '/loans', '/fees', '/fee-structure',
-    '/fee-reports', '/fee-ledger', '/certificates', '/courses',
-    '/usn-pending', '/import-export',
-  ],
-  // Staff users can only work on their own weekly diary — plus their own password.
-  staff: ['/diary', '/change-password'],
-  // Chairpersons review and approve staff diaries — plus their own password.
-  chairperson: ['/diary-approvals', '/change-password'],
-};
-
-const HOME_BY_ROLE = { admin: '/', admission_staff: '/admissions', staff: '/diary', chairperson: '/diary-approvals' };
-const ROLE_LABEL = { admin: 'Admin', admission_staff: 'Admission Staff', staff: 'Staff', chairperson: 'Chairperson' };
 
 export default function App() {
   const { isAuthenticated, user, logout } = useAuth();
